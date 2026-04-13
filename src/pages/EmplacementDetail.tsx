@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { ArrowLeft, Plus, Settings, Euro, TrendingUp, Cpu, Trash2 } from 'lucide-react';
@@ -8,11 +8,13 @@ import {
   type Periode,
   type ChartPoint,
   PERIODE_LABELS,
-  getPeriodBounds,
   sumRevenue,
   buildChartData,
   revenueByMachine,
+  getRevenueQueryIsoRange,
+  filterTransactionsForChartWindow,
 } from '../utils/revenueStats';
+import { fetchTransactionsForRevenue } from '../utils/fetchTransactionsForRevenue';
 
 interface Machine {
   id: string;
@@ -89,6 +91,44 @@ export default function EmplacementDetail() {
     fetchData();
   }, [id]);
 
+  const refreshRevenue = useCallback(
+    async (showSpinner = true) => {
+      if (!id || loading || machines.length === 0) {
+        if (machines.length === 0) {
+          setCaLaverie(0);
+          setChartData([]);
+          setRevenusByMachine({});
+          setRevenueError(null);
+        }
+        return;
+      }
+      if (showSpinner) setRevenueLoading(true);
+      setRevenueError(null);
+      try {
+        const { startIso, endIso, chartStart, chartEnd } = getRevenueQueryIsoRange(periode);
+        const machineIds = machines.map((m) => m.id);
+        const idSet = new Set(machineIds);
+        const raw = await fetchTransactionsForRevenue(supabase, {
+          startIso,
+          endIso,
+          machineIds,
+        });
+        const rows = filterTransactionsForChartWindow(raw, chartStart, chartEnd, periode);
+        setCaLaverie(sumRevenue(rows));
+        setChartData(buildChartData(rows, periode, { start: chartStart, end: chartEnd }));
+        setRevenusByMachine(revenueByMachine(rows, idSet));
+      } catch (err) {
+        setCaLaverie(0);
+        setChartData([]);
+        setRevenusByMachine({});
+        setRevenueError(err instanceof Error ? err.message : 'Erreur CA');
+      } finally {
+        setRevenueLoading(false);
+      }
+    },
+    [id, loading, machines, periode]
+  );
+
   useEffect(() => {
     if (!id || loading) return;
     if (machines.length === 0) {
@@ -98,42 +138,39 @@ export default function EmplacementDetail() {
       setRevenueError(null);
       return;
     }
-    let cancelled = false;
-    (async () => {
-      setRevenueLoading(true);
-      setRevenueError(null);
-      try {
-        const { start, end } = getPeriodBounds(periode);
-        const machineIds = machines.map((m) => m.id);
-        const idSet = new Set(machineIds);
-        const { data: txData, error: txError } = await supabase
-          .from('transactions')
-          .select('machine_id, montant, amount, payment_method, created_at')
-          .in('machine_id', machineIds)
-          .gte('created_at', start.toISOString())
-          .lte('created_at', end.toISOString())
-          .order('created_at', { ascending: true });
-        if (txError) throw txError;
-        if (cancelled) return;
-        const rows = txData ?? [];
-        setCaLaverie(sumRevenue(rows));
-        setChartData(buildChartData(rows, periode));
-        setRevenusByMachine(revenueByMachine(rows, idSet));
-      } catch (err) {
-        if (!cancelled) {
-          setCaLaverie(0);
-          setChartData([]);
-          setRevenusByMachine({});
-          setRevenueError(err instanceof Error ? err.message : 'Erreur CA');
-        }
-      } finally {
-        if (!cancelled) setRevenueLoading(false);
-      }
-    })();
+    refreshRevenue(true);
+  }, [id, periode, machines, loading, refreshRevenue]);
+
+  useEffect(() => {
+    if (!id || loading || machines.length === 0) return;
+    const channel = supabase
+      .channel(`emplacement-${id}-revenue-tx`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'transactions' },
+        () => refreshRevenue(false)
+      )
+      .subscribe();
     return () => {
-      cancelled = true;
+      supabase.removeChannel(channel);
     };
-  }, [id, periode, machines, loading]);
+  }, [id, loading, machines.length, refreshRevenue]);
+
+  useEffect(() => {
+    const onVis = () => {
+      if (document.visibilityState === 'visible' && id && !loading && machines.length > 0) {
+        refreshRevenue(false);
+      }
+    };
+    document.addEventListener('visibilitychange', onVis);
+    return () => document.removeEventListener('visibilitychange', onVis);
+  }, [id, loading, machines.length, refreshRevenue]);
+
+  useEffect(() => {
+    if (!id || loading || machines.length === 0) return;
+    const t = setInterval(() => refreshRevenue(false), 45_000);
+    return () => clearInterval(t);
+  }, [id, loading, machines.length, refreshRevenue]);
 
   useEffect(() => {
     if (emplacement) {
@@ -332,11 +369,16 @@ export default function EmplacementDetail() {
       </div>
 
       <div style={{ marginBottom: 32, padding: 24, backgroundColor: '#FFF', borderRadius: 16, border: '1px solid #EEE', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
-        <h3 style={{ fontSize: 17, fontWeight: '600', color: '#000', margin: '0 0 20px' }}>Revenus — {PERIODE_LABELS[periode]}</h3>
+        <h3 style={{ fontSize: 17, fontWeight: '600', color: '#000', margin: '0 0 8px' }}>Revenus — {PERIODE_LABELS[periode]}</h3>
+        <p style={{ fontSize: 13, color: '#888', margin: '0 0 20px' }}>
+          Carte + portefeuille (hors codes promo gratuits). Courbe = tous les jours / créneaux de la période.
+        </p>
         {revenueLoading ? (
           <p style={{ color: '#666', padding: 32 }}>Chargement du graphique...</p>
         ) : chartData.length === 0 ? (
-          <p style={{ color: '#666', padding: 32 }}>Aucune transaction payante sur cette période pour cette laverie.</p>
+          <p style={{ color: '#666', padding: 32 }}>Aucune donnée pour cette période.</p>
+        ) : chartData.every((p) => p.montant === 0) ? (
+          <p style={{ color: '#666', padding: 32 }}>Aucun encaissement sur cette période pour cette laverie (promos exclus).</p>
         ) : (
           <div style={{ width: '100%', height: 300 }}>
             <ResponsiveContainer>

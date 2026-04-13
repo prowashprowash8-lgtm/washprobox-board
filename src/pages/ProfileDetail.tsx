@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
-import { ArrowLeft, MapPin, RotateCcw, TicketPercent } from 'lucide-react';
+import { ArrowLeft, MapPin, TicketPercent } from 'lucide-react';
 
 interface Profile {
   id: string;
@@ -30,14 +30,26 @@ interface TransactionWithDetails {
   emplacement_name?: string | null;
 }
 
+interface WalletStatsRow {
+  wallet_balance_centimes: number;
+  total_recharged_centimes: number | string;
+  total_wallet_refunded_centimes?: number | string;
+}
+
+function centimesToEuros(c: number | string | null | undefined): string {
+  const n = typeof c === 'string' ? Number(c) : Number(c ?? 0);
+  if (!Number.isFinite(n)) return '0.00';
+  return (n / 100).toFixed(2);
+}
+
 export default function ProfileDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [transactions, setTransactions] = useState<TransactionWithDetails[]>([]);
+  const [walletStats, setWalletStats] = useState<WalletStatsRow | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [refunding, setRefunding] = useState<string | null>(null);
 
   const displayName = (p: Profile) => {
     const name = p.full_name || [p.first_name, p.last_name].filter(Boolean).join(' ') || (p.prenom && p.nom ? `${p.prenom} ${p.nom}` : p.prenom || p.nom) || p.email;
@@ -66,6 +78,20 @@ export default function ProfileDetail() {
         ...t,
         machine_nom: (t as { machine_name?: string }).machine_name ?? t.machine_nom,
       })));
+
+      const { data: walletData, error: walletErr } = await supabase.rpc('get_user_wallet_stats', {
+        p_user_id: id,
+      });
+      if (!walletErr && walletData != null) {
+        const row = Array.isArray(walletData) ? (walletData[0] as WalletStatsRow | undefined) : (walletData as WalletStatsRow);
+        if (row && typeof row.wallet_balance_centimes !== 'undefined') {
+          setWalletStats(row);
+        } else {
+          setWalletStats(null);
+        }
+      } else {
+        setWalletStats(null);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erreur');
     } finally {
@@ -76,23 +102,6 @@ export default function ProfileDetail() {
   useEffect(() => {
     fetchData();
   }, [id]);
-
-  const handleRefund = async (txId: string) => {
-    if (!confirm('Confirmer le remboursement de cette transaction ?')) return;
-    setRefunding(txId);
-    try {
-      const { error } = await supabase.rpc('refund_transaction', { p_transaction_id: txId, p_reason: 'Remboursé depuis le board' });
-      if (error) {
-        const fallback = await supabase.from('transactions').update({ status: 'refunded', refunded_at: new Date().toISOString() }).eq('id', txId);
-        if (fallback.error) throw error;
-      }
-      await fetchData();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Erreur lors du remboursement');
-    } finally {
-      setRefunding(null);
-    }
-  };
 
   if (loading) return <p style={{ color: '#666' }}>Chargement...</p>;
   if (error || !profile) return <p style={{ color: '#B91C1C' }}>{error || 'Profil introuvable.'}</p>;
@@ -121,6 +130,26 @@ export default function ProfileDetail() {
       </div>
 
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(180px, 1fr))', gap: 20, marginBottom: 24 }}>
+        <div style={{ padding: 20, backgroundColor: '#FFF', borderRadius: 12, border: '1px solid #EEE' }}>
+          <p style={{ margin: 0, fontSize: 13, color: '#666' }}>Total versé (recharges portefeuille)</p>
+          <p style={{ margin: '8px 0 0', fontSize: 20, fontWeight: '700', color: '#1C69D3' }}>
+            {walletStats ? `${centimesToEuros(walletStats.total_recharged_centimes)} €` : '—'}
+          </p>
+        </div>
+        <div style={{ padding: 20, backgroundColor: '#FFF', borderRadius: 12, border: '1px solid #EEE' }}>
+          <p style={{ margin: 0, fontSize: 13, color: '#666' }}>Solde portefeuille disponible</p>
+          <p style={{ margin: '8px 0 0', fontSize: 20, fontWeight: '700', color: '#059669' }}>
+            {walletStats ? `${centimesToEuros(walletStats.wallet_balance_centimes)} €` : '—'}
+          </p>
+        </div>
+        <div style={{ padding: 20, backgroundColor: '#FFF', borderRadius: 12, border: '1px solid #EEE' }}>
+          <p style={{ margin: 0, fontSize: 13, color: '#666' }}>Remboursements portefeuille (Stripe)</p>
+          <p style={{ margin: '8px 0 0', fontSize: 20, fontWeight: '700', color: '#B45309' }}>
+            {walletStats && typeof walletStats.total_wallet_refunded_centimes !== 'undefined'
+              ? `${centimesToEuros(walletStats.total_wallet_refunded_centimes)} €`
+              : '—'}
+          </p>
+        </div>
         <div style={{ padding: 20, backgroundColor: '#FFF', borderRadius: 12, border: '1px solid #EEE' }}>
           <p style={{ margin: 0, fontSize: 13, color: '#666' }}>Total dépensé</p>
           <p style={{ margin: '8px 0 0', fontSize: 20, fontWeight: '700', color: '#000' }}>{totalDepense.toFixed(2)} €</p>
@@ -152,7 +181,6 @@ export default function ProfileDetail() {
                 <th style={{ padding: '12px 20px', textAlign: 'left', fontSize: 12, fontWeight: '600', color: '#666' }}>Machine</th>
                 <th style={{ padding: '12px 20px', textAlign: 'left', fontSize: 12, fontWeight: '600', color: '#666' }}>Source</th>
                 <th style={{ padding: '12px 20px', textAlign: 'right', fontSize: 12, fontWeight: '600', color: '#666' }}>Montant</th>
-                <th style={{ padding: '12px 20px', width: 120 }} />
               </tr>
             </thead>
             <tbody>
@@ -176,17 +204,6 @@ export default function ProfileDetail() {
                   </td>
                   <td style={{ padding: '14px 20px', fontSize: 14, fontWeight: '600', color: isRefunded(t) ? '#B91C1C' : t.payment_method === 'test' ? '#6B7280' : '#000', textAlign: 'right' }}>
                     {isRefunded(t) ? '(Remboursé) ' : ''}{t.payment_method === 'test' ? '—' : t.payment_method === 'promo' ? 'Gratuit' : `${getAmount(t).toFixed(2)} €`}
-                  </td>
-                  <td style={{ padding: '14px 20px' }}>
-                    {!isRefunded(t) && t.payment_method !== 'promo' && t.payment_method !== 'test' && (
-                      <button
-                        onClick={() => handleRefund(t.id)}
-                        disabled={refunding === t.id}
-                        style={{ display: 'flex', alignItems: 'center', gap: 6, padding: '8px 14px', backgroundColor: '#FEE2E2', color: '#B91C1C', border: 'none', borderRadius: 8, fontSize: 13, fontWeight: '600', cursor: refunding === t.id ? 'wait' : 'pointer' }}
-                      >
-                        <RotateCcw size={14} /> {refunding === t.id ? '...' : 'Rembourser'}
-                      </button>
-                    )}
                   </td>
                 </tr>
               ))}

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Routes, Route, NavLink, useNavigate } from 'react-router-dom';
 import { LayoutDashboard, Receipt, MapPin, Tablet, Settings, Users, Megaphone, Target, LogOut, RotateCcw } from 'lucide-react';
 import Accueil from './pages/Accueil';
@@ -14,10 +14,57 @@ import Utilisateurs from './pages/Utilisateurs';
 import ProfileDetail from './pages/ProfileDetail';
 import Login from './pages/Login';
 import { useAuth } from './contexts/AuthContext';
+import { supabase } from './supabaseClient';
 
 function App() {
   const { user, loading, signOut } = useAuth();
   const navigate = useNavigate();
+  const [pendingRefundCount, setPendingRefundCount] = useState(0);
+
+  const fetchPendingRefundCount = useCallback(async () => {
+    const { count, error } = await supabase
+      .from('refund_requests')
+      .select('*', { count: 'exact', head: true })
+      .eq('statut', 'pending');
+    if (!error) setPendingRefundCount(count ?? 0);
+  }, []);
+
+  useEffect(() => {
+    if (!user) return;
+    fetchPendingRefundCount();
+  }, [user, fetchPendingRefundCount]);
+
+  useEffect(() => {
+    if (!user) return;
+    const channel = supabase
+      .channel('sidebar-refund-requests')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'refund_requests' },
+        () => {
+          fetchPendingRefundCount();
+        }
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user, fetchPendingRefundCount]);
+
+  useEffect(() => {
+    if (!user) return;
+    const onVis = () => {
+      if (document.visibilityState === 'visible') fetchPendingRefundCount();
+    };
+    document.addEventListener('visibilitychange', onVis);
+    return () => document.removeEventListener('visibilitychange', onVis);
+  }, [user, fetchPendingRefundCount]);
+
+  useEffect(() => {
+    if (!user) return;
+    const t = setInterval(() => fetchPendingRefundCount(), 45_000);
+    return () => clearInterval(t);
+  }, [user, fetchPendingRefundCount]);
 
   if (loading) {
     return (
@@ -69,7 +116,7 @@ function App() {
           <MenuLink icon={<Tablet size={20}/>} label="Appareils" to="/appareils" />
           <MenuLink icon={<Megaphone size={20}/>} label="Marketing" to="/marketing" />
           <MenuLink icon={<Target size={20}/>} label="Missions" to="/missions" />
-          <MenuLink icon={<RotateCcw size={20}/>} label="Remboursements" to="/remboursements" />
+          <MenuLink icon={<RotateCcw size={20}/>} label="Remboursements" to="/remboursements" badge={pendingRefundCount} />
           <hr style={{ width: '100%', border: '0.5px solid #F0F0F0', margin: '10px 0' }} />
           <MenuLink icon={<Users size={20}/>} label="Utilisateurs" to="/utilisateurs" />
           <MenuLink icon={<Settings size={20}/>} label="Configuration" to="/configuration" />
@@ -135,18 +182,57 @@ function Placeholder({ title }: { title: string }) {
   );
 }
 
-const MenuLink = ({ icon, label, to }: { icon: React.ReactNode; label: string; to: string }) => (
+const MenuLink = ({
+  icon,
+  label,
+  to,
+  badge,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  to: string;
+  badge?: number;
+}) => (
   <NavLink
     to={to}
     style={({ isActive }) => ({
-      display: 'flex', alignItems: 'center', gap: 12, padding: '10px 15px', 
-      borderRadius: 8, textDecoration: 'none',
+      display: 'flex',
+      alignItems: 'center',
+      gap: 12,
+      padding: '10px 15px',
+      borderRadius: 8,
+      textDecoration: 'none',
       backgroundColor: isActive ? '#E8F0FC' : 'transparent',
       color: isActive ? '#1C69D3' : '#444',
       fontWeight: isActive ? '700' : '400',
     })}
   >
-    {icon} <span>{label}</span>
+    {icon}
+    <span style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
+      {label}
+      {badge != null && badge > 0 && (
+        <span
+          aria-label={`${badge} demande${badge > 1 ? 's' : ''} en attente`}
+          style={{
+            minWidth: 20,
+            height: 20,
+            padding: '0 6px',
+            borderRadius: 999,
+            backgroundColor: '#EF4444',
+            color: '#fff',
+            fontSize: 11,
+            fontWeight: 700,
+            display: 'inline-flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            lineHeight: 1,
+            flexShrink: 0,
+          }}
+        >
+          {badge > 99 ? '99+' : badge}
+        </span>
+      )}
+    </span>
   </NavLink>
 );
 

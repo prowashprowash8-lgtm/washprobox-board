@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
+import { fetchTransactionsForRevenue } from '../utils/fetchTransactionsForRevenue';
 import { Plus } from 'lucide-react';
 
 interface EmplacementRow {
@@ -45,13 +46,15 @@ export default function Emplacements() {
       const { data: machines, error: machErr } = await supabase.from('machines').select('id, emplacement_id');
       if (machErr) throw new Error(machErr.message);
 
-      let transactions: { machine_id?: string; montant?: number; payment_method?: string; created_at?: string }[] = [];
-      const txRes = await supabase.from('transactions').select('machine_id, montant, payment_method, created_at');
-      if (!txRes.error) transactions = txRes.data ?? [];
-
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
       const startDate = thirtyDaysAgo.toISOString();
+      const endDate = new Date().toISOString();
+
+      const transactions = await fetchTransactionsForRevenue(supabase, {
+        startIso: startDate,
+        endIso: endDate,
+      });
 
       const machineToEmp: Record<string, string> = {};
       const nbByEmp: Record<string, number> = {};
@@ -63,9 +66,11 @@ export default function Emplacements() {
 
       const revenuByEmp: Record<string, number> = {};
       transactions.forEach((t) => {
-        if (!t.machine_id || !t.created_at || t.created_at < startDate || t.payment_method === 'test') return;
+        if (!t.machine_id || !t.created_at || t.payment_method === 'test' || t.payment_method === 'promo') return;
+        if (t.status === 'refunded') return;
         const eid = machineToEmp[t.machine_id] ?? '_sans_';
-        revenuByEmp[eid] = (revenuByEmp[eid] ?? 0) + Number(t.montant ?? 0);
+        const euros = Number(t.montant ?? t.amount ?? 0);
+        revenuByEmp[eid] = (revenuByEmp[eid] ?? 0) + euros;
       });
 
       const result: EmplacementRow[] = (emplacements ?? []).map((e: { id: string; name: string; address?: string; created_at?: string }) => ({

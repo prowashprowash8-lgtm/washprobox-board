@@ -4,6 +4,7 @@ import { supabase } from '../supabaseClient';
 import { useAuth } from '../contexts/AuthContext';
 import { ArrowLeft, Coins, Settings } from 'lucide-react';
 import { inferMachineKind, type MachineKind } from '../utils/machineKind';
+import { fetchAllTransactionsBoard } from '../utils/fetchAllTransactionsBoard';
 
 interface Machine {
   id: string;
@@ -89,7 +90,7 @@ export default function MachineDetail() {
           const empRes = await supabase.from('emplacements').select('id, name, address').eq('id', machRes.data.emplacement_id).single();
           setEmplacement(empRes.data ?? null);
         }
-        const { data: allTx } = await supabase.rpc('get_all_transactions');
+        const allTx = await fetchAllTransactionsBoard(supabase);
         const machineTx = (allTx ?? []).filter((t: { machine_id?: string }) => t.machine_id === id);
         const thirtyDaysAgo = new Date();
         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);

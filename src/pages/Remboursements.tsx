@@ -9,6 +9,7 @@ interface RefundRequest {
   motif: string;
   statut: 'pending' | 'approved' | 'rejected';
   admin_note: string | null;
+  compensation_promo_code?: string | null;
   created_at: string;
   transaction?: {
     amount: number;
@@ -99,14 +100,33 @@ export default function Remboursements() {
   const updateStatut = async (id: string, statut: 'approved' | 'rejected') => {
     setUpdating(id);
     const note = adminNoteMap[id] || '';
-    const { error } = await supabase
-      .from('refund_requests')
-      .update({ statut, admin_note: note || null })
-      .eq('id', id);
-    if (!error) {
-      setRequests((prev) => prev.map((r) => r.id === id ? { ...r, statut, admin_note: note || null } : r));
-    }
+    const { data, error } = await supabase.rpc('approve_or_reject_refund_request', {
+      p_request_id: id,
+      p_statut: statut,
+      p_admin_note: note,
+    });
     setUpdating(null);
+    if (error) {
+      console.error(error);
+      return;
+    }
+    const payload = data as { success?: boolean; compensation_promo_code?: string | null } | null;
+    if (payload && payload.success === false) return;
+    setRequests((prev) =>
+      prev.map((r) =>
+        r.id === id
+          ? {
+              ...r,
+              statut,
+              admin_note: note || null,
+              compensation_promo_code:
+                statut === 'approved'
+                  ? payload?.compensation_promo_code ?? r.compensation_promo_code ?? null
+                  : null,
+            }
+          : r
+      )
+    );
   };
 
   const filtered = filter === 'all' ? requests : requests.filter((r) => r.statut === filter);
@@ -226,6 +246,13 @@ export default function Remboursements() {
                 )}
 
                 {/* Note admin si traitée */}
+                {r.statut === 'approved' && r.compensation_promo_code && (
+                  <div style={{ marginTop: 10, padding: '10px 14px', background: '#ECFDF5', borderRadius: 8, border: '1px solid #A7F3D0', fontSize: 14, color: '#065F46' }}>
+                    <strong>Code promo généré :</strong>{' '}
+                    <span style={{ fontFamily: 'monospace', fontWeight: '700' }}>{r.compensation_promo_code}</span>
+                  </div>
+                )}
+
                 {r.statut !== 'pending' && r.admin_note && (
                   <div style={{ fontSize: 13, color: '#555', fontStyle: 'italic', borderTop: '1px solid #eee', paddingTop: 10, marginTop: 4 }}>
                     Note : {r.admin_note}

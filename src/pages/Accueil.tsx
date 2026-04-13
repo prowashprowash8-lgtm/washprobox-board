@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { supabase } from '../supabaseClient';
 import { TrendingUp, Cpu, Euro } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
@@ -6,10 +6,12 @@ import {
   type Periode,
   type ChartPoint,
   PERIODE_LABELS,
-  getPeriodBounds,
   sumRevenue,
   buildChartData,
+  getRevenueQueryIsoRange,
+  filterTransactionsForChartWindow,
 } from '../utils/revenueStats';
+import { fetchTransactionsForRevenue } from '../utils/fetchTransactionsForRevenue';
 
 export default function Accueil() {
   const [periode, setPeriode] = useState<Periode>('mois');
@@ -19,8 +21,8 @@ export default function Accueil() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const fetchStats = async () => {
-    setLoading(true);
+  const fetchStats = useCallback(async (showLoading = true) => {
+    if (showLoading) setLoading(true);
     setError(null);
     try {
       const { count, error: machinesError } = await supabase
@@ -29,22 +31,15 @@ export default function Accueil() {
       if (machinesError) throw machinesError;
       setNbAppareils(count ?? 0);
 
-      const { start, end } = getPeriodBounds(periode);
-      const startIso = start.toISOString();
-      const endIso = end.toISOString();
+      const { startIso, endIso, chartStart, chartEnd } = getRevenueQueryIsoRange(periode);
 
-      const { data: txData, error: txError } = await supabase
-        .from('transactions')
-        .select('montant, amount, payment_method, created_at')
-        .gte('created_at', startIso)
-        .lte('created_at', endIso)
-        .order('created_at', { ascending: true });
-
-      if (txError) throw txError;
-
-      const rows = txData ?? [];
+      const raw = await fetchTransactionsForRevenue(supabase, {
+        startIso,
+        endIso,
+      });
+      const rows = filterTransactionsForChartWindow(raw, chartStart, chartEnd, periode);
       setCa(sumRevenue(rows));
-      setChartData(buildChartData(rows, periode));
+      setChartData(buildChartData(rows, periode, { start: chartStart, end: chartEnd }));
     } catch (err) {
       setCa(0);
       setChartData([]);
@@ -52,18 +47,50 @@ export default function Accueil() {
     } finally {
       setLoading(false);
     }
-  };
+  }, [periode]);
 
   useEffect(() => {
-    fetchStats();
-  }, [periode]);
+    fetchStats(true);
+  }, [fetchStats]);
+
+  useEffect(() => {
+    const channel = supabase
+      .channel('accueil-revenues')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'transactions' },
+        () => fetchStats(false)
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [fetchStats]);
+
+  useEffect(() => {
+    const onVis = () => {
+      if (document.visibilityState === 'visible') fetchStats(false);
+    };
+    document.addEventListener('visibilitychange', onVis);
+    return () => document.removeEventListener('visibilitychange', onVis);
+  }, [fetchStats]);
+
+  useEffect(() => {
+    const t = setInterval(() => fetchStats(false), 45_000);
+    return () => clearInterval(t);
+  }, [fetchStats]);
 
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 20, marginBottom: 32 }}>
         <div>
           <h1 style={{ fontSize: 28, fontWeight: '700', color: '#000', margin: 0 }}>Bienvenue Victor !</h1>
-          <p style={{ color: '#666', margin: '8px 0 0' }}>Statistiques de vos appareils connectés (ESP32).</p>
+          <p style={{ color: '#666', margin: '8px 0 0' }}>
+            Statistiques de vos appareils connectés (ESP32). Revenus = cartes + portefeuille (hors codes promo gratuits).
+            <span style={{ display: 'block', marginTop: 6, fontSize: 13, color: '#999' }}>
+              « Aujourd’hui » = uniquement le jour en cours. Pour inclure les paiements d’hier, utilisez « Ce mois » ou « Cette année ».
+            </span>
+          </p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>
           {(['jour', 'mois', 'annee'] as const).map((p) => (
@@ -147,6 +174,8 @@ export default function Accueil() {
           <p style={{ color: '#666', padding: 40 }}>Chargement du graphique...</p>
         ) : chartData.length === 0 ? (
           <p style={{ color: '#666', padding: 40 }}>Aucune donnée pour cette période.</p>
+        ) : chartData.every((p) => p.montant === 0) ? (
+          <p style={{ color: '#666', padding: 40 }}>Aucun encaissement sur cette période (promos gratuits exclus).</p>
         ) : (
           <div style={{ width: '100%', height: 320 }}>
             <ResponsiveContainer>

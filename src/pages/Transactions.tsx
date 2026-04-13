@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
-import { Receipt, Euro, ChevronRight, TicketPercent } from 'lucide-react';
+import { Receipt, Euro, ChevronRight, TicketPercent, Wallet } from 'lucide-react';
+import { fetchAllTransactionsBoard } from '../utils/fetchAllTransactionsBoard';
 
 interface Transaction {
   id: string;
@@ -19,42 +20,71 @@ interface Transaction {
   user_name?: string | null;
 }
 
+function mapRpcRowsToTransactions(txData: Record<string, unknown>[]): Transaction[] {
+  return txData.map((t) => ({
+    id: String(t.id),
+    machine_id: (t.machine_id as string) ?? null,
+    emplacement_id: (t.emplacement_id as string) ?? null,
+    amount: t.amount as number | undefined,
+    montant: t.amount as number | undefined,
+    payment_method: t.payment_method as string | undefined,
+    promo_code: t.promo_code as string | null,
+    user_id: t.user_id as string | null,
+    status: t.status as string | undefined,
+    created_at: String(t.created_at),
+    machine_nom: (t.machine_name as string) || '—',
+    emplacement_name: (t.emplacement_name as string) || '—',
+    user_name: (t.user_name && String(t.user_name).trim()) || '—',
+  }));
+}
+
 export default function Transactions() {
   const navigate = useNavigate();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    const fetchTransactions = async () => {
-      const { data: txData, error: fetchErr } = await supabase.rpc('get_all_transactions');
-
-      if (fetchErr) {
-        setError(fetchErr.message);
-        setLoading(false);
-        return;
-      }
-
-      const txs = (txData ?? []).map((t: Record<string, unknown>) => ({
-        id: t.id,
-        machine_id: t.machine_id,
-        emplacement_id: t.emplacement_id,
-        amount: t.amount,
-        montant: t.amount,
-        payment_method: t.payment_method,
-        promo_code: t.promo_code,
-        user_id: t.user_id,
-        status: t.status,
-        created_at: t.created_at,
-        machine_nom: t.machine_name || '—',
-        emplacement_name: t.emplacement_name || '—',
-        user_name: (t.user_name && String(t.user_name).trim()) || '—',
-      })) as Transaction[];
-      setTransactions(txs);
+  const fetchTransactions = useCallback(async (showLoading = true) => {
+    setError(null);
+    if (showLoading) setLoading(true);
+    try {
+      const txData = await fetchAllTransactionsBoard(supabase);
+      setTransactions(mapRpcRowsToTransactions(txData as Record<string, unknown>[]));
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Erreur de chargement');
+      setTransactions([]);
+    } finally {
       setLoading(false);
-    };
-    fetchTransactions();
+    }
   }, []);
+
+  useEffect(() => {
+    fetchTransactions(true);
+  }, [fetchTransactions]);
+
+  useEffect(() => {
+    const channel = supabase
+      .channel('board-transactions')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'transactions' },
+        () => {
+          fetchTransactions(false);
+        }
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [fetchTransactions]);
+
+  useEffect(() => {
+    const onVis = () => {
+      if (document.visibilityState === 'visible') fetchTransactions(false);
+    };
+    document.addEventListener('visibilitychange', onVis);
+    return () => document.removeEventListener('visibilitychange', onVis);
+  }, [fetchTransactions]);
 
   const nonRefunded = transactions.filter((t) => t.status !== 'refunded' && t.payment_method !== 'test');
   const total = nonRefunded.reduce((s, t) => s + (t.payment_method === 'promo' ? 0 : Number(t.amount ?? t.montant ?? 0)), 0);
@@ -69,7 +99,12 @@ export default function Transactions() {
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 20, marginBottom: 28 }}>
         <div>
           <h1 style={{ fontSize: 28, fontWeight: '700', color: '#000', margin: 0 }}>Transactions</h1>
-          <p style={{ color: '#666', margin: '8px 0 0' }}>Tous les paiements effectués par les clients.</p>
+          <p style={{ color: '#666', margin: '8px 0 0' }}>
+            Tous les paiements effectués par les clients.
+            {!loading && transactions.length > 0 ? (
+              <span style={{ marginLeft: 8, color: '#999' }}>({transactions.length} ligne{transactions.length > 1 ? 's' : ''})</span>
+            ) : null}
+          </p>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '16px 24px', backgroundColor: '#E8F0FC', borderRadius: 12, border: '1px solid #D1E3FA' }}>
           <Euro size={24} color="#1C69D3" />
@@ -124,6 +159,10 @@ export default function Transactions() {
                     ) : t.payment_method === 'promo' ? (
                       <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                         <TicketPercent size={16} color="#059669" /> Code promo {t.promo_code && <code style={{ fontSize: 12, backgroundColor: '#E5E7EB', padding: '2px 6px', borderRadius: 4 }}>{t.promo_code}</code>}
+                      </span>
+                    ) : t.payment_method === 'wallet' ? (
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                        <Wallet size={16} color="#1C69D3" /> Portefeuille
                       </span>
                     ) : (
                       'Carte'
