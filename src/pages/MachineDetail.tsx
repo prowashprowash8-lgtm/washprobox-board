@@ -402,17 +402,6 @@ export default function MachineDetail() {
             setSendError(null);
             setSending(true);
             try {
-              const { error: cmdErr } = await supabase.from('machine_commands').insert({
-                machine_id: machine.id,
-                esp32_id: normalizedEsp32Id,
-                command: 'START',
-                status: 'pending',
-              });
-              if (cmdErr) {
-                throw new Error(`Commande ESP32 : ${cmdErr.message}`);
-              }
-              await supabase.from('machines').update({ statut: 'occupe' }).eq('id', machine.id);
-
               let transactionUserId: string | null = null;
               const { data: profileById, error: profileByIdErr } = await supabase
                 .from('profiles')
@@ -457,6 +446,38 @@ export default function MachineDetail() {
               if (!txData?.id) {
                 throw new Error('Transaction test non créée.');
               }
+
+              const { data: cmdData, error: cmdErr } = await supabase
+                .from('machine_commands')
+                .insert({
+                  machine_id: machine.id,
+                  esp32_id: normalizedEsp32Id,
+                  command: 'START',
+                  status: 'pending',
+                  user_id: transactionUserId,
+                  transaction_id: txData.id,
+                })
+                .select('id')
+                .single();
+              if (cmdErr) {
+                throw new Error(`Commande ESP32 : ${cmdErr.message}`);
+              }
+              if (!cmdData?.id) {
+                throw new Error('Commande ESP32 non créée.');
+              }
+
+              const { error: txLinkErr } = await supabase
+                .from('transactions')
+                .update({ machine_command_id: cmdData.id })
+                .eq('id', txData.id);
+              if (txLinkErr) {
+                throw new Error(`Lien transaction/commande : ${txLinkErr.message}`);
+              }
+
+              await supabase
+                .from('machines')
+                .update({ statut: 'occupe', estimated_end_time: null })
+                .eq('id', machine.id);
             } catch (err) {
               const msg = err instanceof Error ? err.message : String(err);
               setSendError(msg);
