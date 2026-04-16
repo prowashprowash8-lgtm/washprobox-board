@@ -15,6 +15,7 @@ interface Machine {
   modele?: string;
   prix_centimes?: number;
   actif?: boolean;
+  hors_service?: boolean;
   emplacement_id?: string;
   machine_kind?: string | null;
   type?: string | null;
@@ -37,6 +38,7 @@ export default function MachineDetail() {
   const [error, setError] = useState<string | null>(null);
   const [sending, setSending] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
+  const [updatingServiceState, setUpdatingServiceState] = useState(false);
   const [showEdit, setShowEdit] = useState(false);
   const [formMachine, setFormMachine] = useState({
     nom: '',
@@ -74,7 +76,7 @@ export default function MachineDetail() {
       try {
         let machRes = await supabase
           .from('machines')
-          .select('id, nom, esp32_id, numero_serie, marque, modele, prix_centimes, actif, emplacement_id, machine_kind, type')
+          .select('id, nom, esp32_id, numero_serie, marque, modele, prix_centimes, actif, hors_service, emplacement_id, machine_kind, type')
           .eq('id', id)
           .single();
         if (machRes.error) {
@@ -167,7 +169,7 @@ export default function MachineDetail() {
         .from('machines')
         .update(payload)
         .eq('id', id)
-        .select('id, nom, esp32_id, numero_serie, marque, modele, prix_centimes, actif, emplacement_id, machine_kind, type')
+        .select('id, nom, esp32_id, numero_serie, marque, modele, prix_centimes, actif, hors_service, emplacement_id, machine_kind, type')
         .single();
       if (error) throw error;
       if (updated) {
@@ -183,6 +185,34 @@ export default function MachineDetail() {
       setSendError(`Erreur : ${msg}`);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleToggleMachineService = async () => {
+    if (!machine || !id) return;
+    setUpdatingServiceState(true);
+    setSendError(null);
+    try {
+      const nextHorsService = !(machine.hors_service ?? false);
+      const { data: updated, error } = await supabase
+        .from('machines')
+        .update({ hors_service: nextHorsService })
+        .eq('id', id)
+        .select('id, nom, esp32_id, numero_serie, marque, modele, prix_centimes, actif, hors_service, emplacement_id, machine_kind, type')
+        .single();
+      if (error) throw error;
+      if (updated) {
+        setMachine(updated as Machine);
+      } else {
+        setMachine((prev) => (prev ? { ...prev, hors_service: nextHorsService } : prev));
+      }
+    } catch (err) {
+      const msg = (err && typeof err === 'object' && 'message' in err)
+        ? (err as { message: string }).message
+        : err instanceof Error ? err.message : String(err);
+      setSendError(`Erreur : ${msg}`);
+    } finally {
+      setUpdatingServiceState(false);
     }
   };
 
@@ -209,7 +239,7 @@ export default function MachineDetail() {
               <p style={{ margin: '8px 0 0', fontSize: 14, color: '#666' }}>Laverie : {emplacement.name}</p>
             )}
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
             <button
               onClick={() => { setSendError(null); setShowEdit(true); }}
               style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 18px', backgroundColor: '#F5F5F5', color: '#444', border: 'none', borderRadius: 10, fontWeight: '600', cursor: 'pointer', fontSize: 14 }}
@@ -217,17 +247,29 @@ export default function MachineDetail() {
               <Settings size={18} /> Modifier les infos
             </button>
             <span
-            style={{
-              padding: '6px 14px',
-              borderRadius: 8,
-              fontSize: 14,
-              fontWeight: '600',
-              backgroundColor: machine.actif ? '#D1E3FA' : '#FEE2E2',
-              color: machine.actif ? '#1B2430' : '#B91C1C',
-            }}
-          >
-            {machine.actif ? 'Actif' : 'Inactif'}
-          </span>
+              style={{
+                padding: '6px 14px',
+                borderRadius: 8,
+                fontSize: 14,
+                fontWeight: '600',
+                backgroundColor: machine.actif ? '#D1E3FA' : '#F3F4F6',
+                color: machine.actif ? '#1B2430' : '#6B7280',
+              }}
+            >
+              {machine.actif ? 'Visible app' : 'Inactive'}
+            </span>
+            <span
+              style={{
+                padding: '6px 14px',
+                borderRadius: 8,
+                fontSize: 14,
+                fontWeight: '600',
+                backgroundColor: machine.hors_service ? '#FEE2E2' : '#DCFCE7',
+                color: machine.hors_service ? '#B91C1C' : '#166534',
+              }}
+            >
+              {machine.hors_service ? 'Hors service' : 'En service'}
+            </span>
           </div>
         </div>
       </div>
@@ -330,15 +372,22 @@ export default function MachineDetail() {
                   style={{ width: '100%', padding: 12, border: '1px solid #E5E7EB', borderRadius: 10, fontSize: 15, boxSizing: 'border-box' }}
                 />
               </div>
-              <div style={{ marginBottom: 24, display: 'flex', alignItems: 'center', gap: 10 }}>
-                <input
-                  type="checkbox"
-                  id="actif"
-                  checked={formMachine.actif}
-                  onChange={(e) => setFormMachine((p) => ({ ...p, actif: e.target.checked }))}
-                  style={{ width: 18, height: 18, cursor: 'pointer' }}
-                />
-                <label htmlFor="actif" style={{ fontSize: 14, fontWeight: '500', color: '#374151', cursor: 'pointer' }}>Machine active</label>
+              <div style={{ marginBottom: 24 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <input
+                    type="checkbox"
+                    id="hors-service"
+                    checked={!formMachine.actif}
+                    onChange={(e) => setFormMachine((p) => ({ ...p, actif: !e.target.checked }))}
+                    style={{ width: 18, height: 18, cursor: 'pointer' }}
+                  />
+                  <label htmlFor="hors-service" style={{ fontSize: 14, fontWeight: '500', color: '#374151', cursor: 'pointer' }}>
+                    Masquer la machine dans l&apos;app
+                  </label>
+                </div>
+                <p style={{ margin: '8px 0 0', fontSize: 12, color: '#666' }}>
+                  Une machine inactive n&apos;apparait pas dans la laverie sur l&apos;app.
+                </p>
               </div>
               <div style={{ display: 'flex', gap: 10, justifyContent: 'space-between', flexWrap: 'wrap' }}>
                 <button
@@ -385,154 +434,203 @@ export default function MachineDetail() {
       </div>
 
       <div style={{ padding: 28, backgroundColor: '#FFF', borderRadius: 16, border: '1px solid #EEE' }}>
-        <h3 style={{ margin: '0 0 12px', fontSize: 16, fontWeight: '600', color: '#000' }}>Lancer un cycle (test)</h3>
+        <h3 style={{ margin: '0 0 12px', fontSize: 16, fontWeight: '600', color: '#000' }}>Fonctions machine</h3>
         <p style={{ margin: '0 0 20px', fontSize: 14, color: '#666' }}>
-          Lance la machine sans comptabiliser (test interne). La commande est envoyée via WiFi à l&apos;ESP32.
+          Depuis ici, vous pouvez mettre la machine hors service sans la masquer de l&apos;app, ou lancer des actions techniques de test.
         </p>
         {sendError && (
           <p style={{ margin: '0 0 16px', color: '#B91C1C', fontSize: 14 }}>{sendError}</p>
         )}
-        <button
-          onClick={async () => {
-            const normalizedEsp32Id = (machine?.esp32_id ?? '').trim().toUpperCase();
-            if (!normalizedEsp32Id) {
-              setSendError('ID ESP32 manquant sur cette machine.');
-              return;
-            }
-            setSendError(null);
-            setSending(true);
-            try {
-              let transactionUserId: string | null = null;
-              const { data: profileById, error: profileByIdErr } = await supabase
-                .from('profiles')
-                .select('id')
-                .eq('id', user!.id)
-                .maybeSingle();
-              if (profileByIdErr) {
-                throw new Error(`Profil utilisateur introuvable (id) : ${profileByIdErr.message}`);
-              }
-              if (profileById?.id) {
-                transactionUserId = profileById.id;
-              } else if (user?.email) {
-                const { data: profileByEmail, error: profileByEmailErr } = await supabase
-                  .from('profiles')
-                  .select('id')
-                  .eq('email', user.email)
-                  .maybeSingle();
-                if (profileByEmailErr) {
-                  throw new Error(`Profil utilisateur introuvable (email) : ${profileByEmailErr.message}`);
-                }
-                transactionUserId = profileByEmail?.id ?? null;
-              }
-              if (!transactionUserId) {
-                throw new Error('Aucun profil lié à cet utilisateur. Créez une ligne dans profiles puis réessayez.');
-              }
+        <div style={{ display: 'grid', gap: 16 }}>
+          <div style={{ padding: 18, borderRadius: 14, border: '1px solid #FECACA', backgroundColor: '#FEF2F2' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
+              <div>
+                <p style={{ margin: '0 0 6px', fontSize: 15, fontWeight: 700, color: '#991B1B' }}>Etat de service</p>
+                <p style={{ margin: 0, fontSize: 13, color: '#7F1D1D', maxWidth: 520 }}>
+                  La machine reste visible dans l&apos;app, mais les utilisateurs ne peuvent plus la payer ni la demarrer tant qu&apos;elle est hors service.
+                </p>
+              </div>
+              <button
+                onClick={handleToggleMachineService}
+                disabled={updatingServiceState}
+                style={{
+                  padding: '12px 18px',
+                  backgroundColor: machine.hors_service ? '#DCFCE7' : '#FEE2E2',
+                  color: machine.hors_service ? '#166534' : '#B91C1C',
+                  border: machine.hors_service ? '1px solid #BBF7D0' : '1px solid #FECACA',
+                  borderRadius: 12,
+                  fontSize: 14,
+                  fontWeight: '600',
+                  cursor: updatingServiceState ? 'wait' : 'pointer',
+                }}
+              >
+                {updatingServiceState
+                  ? 'Mise a jour...'
+                  : machine.hors_service
+                    ? 'Remettre en service'
+                    : 'Mettre hors service'}
+              </button>
+            </div>
+          </div>
 
-              const { data: txData, error: txErr } = await supabase
-                .from('transactions')
-                .insert({
-                  user_id: transactionUserId,
-                  machine_id: machine.id,
-                  emplacement_id: machine.emplacement_id ?? null,
-                  amount: 0,
-                  montant: 0,
-                  payment_method: 'test',
-                })
-                .select('id')
-                .single();
-              if (txErr) {
-                throw new Error(`Transaction : ${txErr.message}`);
-              }
-              if (!txData?.id) {
-                throw new Error('Transaction test non créée.');
-              }
+          <div style={{ padding: 18, borderRadius: 14, border: '1px solid #BFDBFE', backgroundColor: '#EFF6FF' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
+              <div>
+                <p style={{ margin: '0 0 6px', fontSize: 15, fontWeight: 700, color: '#1E3A8A' }}>Cycle de test</p>
+                <p style={{ margin: 0, fontSize: 13, color: '#1D4ED8', maxWidth: 520 }}>
+                  Envoie une commande START a l&apos;ESP32 sans comptabiliser un vrai paiement client.
+                </p>
+              </div>
+              <button
+                onClick={async () => {
+                  const normalizedEsp32Id = (machine?.esp32_id ?? '').trim().toUpperCase();
+                  if (!normalizedEsp32Id) {
+                    setSendError('ID ESP32 manquant sur cette machine.');
+                    return;
+                  }
+                  setSendError(null);
+                  setSending(true);
+                  try {
+                    let transactionUserId: string | null = null;
+                    const { data: profileById, error: profileByIdErr } = await supabase
+                      .from('profiles')
+                      .select('id')
+                      .eq('id', user!.id)
+                      .maybeSingle();
+                    if (profileByIdErr) {
+                      throw new Error(`Profil utilisateur introuvable (id) : ${profileByIdErr.message}`);
+                    }
+                    if (profileById?.id) {
+                      transactionUserId = profileById.id;
+                    } else if (user?.email) {
+                      const { data: profileByEmail, error: profileByEmailErr } = await supabase
+                        .from('profiles')
+                        .select('id')
+                        .eq('email', user.email)
+                        .maybeSingle();
+                      if (profileByEmailErr) {
+                        throw new Error(`Profil utilisateur introuvable (email) : ${profileByEmailErr.message}`);
+                      }
+                      transactionUserId = profileByEmail?.id ?? null;
+                    }
+                    if (!transactionUserId) {
+                      throw new Error('Aucun profil lié à cet utilisateur. Créez une ligne dans profiles puis réessayez.');
+                    }
 
-              const { data: cmdData, error: cmdErr } = await supabase
-                .from('machine_commands')
-                .insert({
-                  machine_id: machine.id,
-                  esp32_id: normalizedEsp32Id,
-                  command: 'START',
-                  status: 'pending',
-                  user_id: transactionUserId,
-                  transaction_id: txData.id,
-                })
-                .select('id')
-                .single();
-              if (cmdErr) {
-                throw new Error(`Commande ESP32 : ${cmdErr.message}`);
-              }
-              if (!cmdData?.id) {
-                throw new Error('Commande ESP32 non créée.');
-              }
+                    const { data: txData, error: txErr } = await supabase
+                      .from('transactions')
+                      .insert({
+                        user_id: transactionUserId,
+                        machine_id: machine.id,
+                        emplacement_id: machine.emplacement_id ?? null,
+                        amount: 0,
+                        montant: 0,
+                        payment_method: 'test',
+                      })
+                      .select('id')
+                      .single();
+                    if (txErr) {
+                      throw new Error(`Transaction : ${txErr.message}`);
+                    }
+                    if (!txData?.id) {
+                      throw new Error('Transaction test non créée.');
+                    }
 
-              const { error: txLinkErr } = await supabase
-                .from('transactions')
-                .update({ machine_command_id: cmdData.id })
-                .eq('id', txData.id);
-              if (txLinkErr) {
-                throw new Error(`Lien transaction/commande : ${txLinkErr.message}`);
-              }
+                    const { data: cmdData, error: cmdErr } = await supabase
+                      .from('machine_commands')
+                      .insert({
+                        machine_id: machine.id,
+                        esp32_id: normalizedEsp32Id,
+                        command: 'START',
+                        status: 'pending',
+                        user_id: transactionUserId,
+                        transaction_id: txData.id,
+                      })
+                      .select('id')
+                      .single();
+                    if (cmdErr) {
+                      throw new Error(`Commande ESP32 : ${cmdErr.message}`);
+                    }
+                    if (!cmdData?.id) {
+                      throw new Error('Commande ESP32 non créée.');
+                    }
 
-              await supabase
-                .from('machines')
-                .update({ statut: 'occupe', estimated_end_time: null })
-                .eq('id', machine.id);
-            } catch (err) {
-              const msg = err instanceof Error ? err.message : String(err);
-              setSendError(msg);
-            } finally {
-              setSending(false);
-            }
-          }}
-          disabled={!machine.esp32_id || sending}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 10,
-            padding: '14px 28px',
-            backgroundColor: '#1C69D3',
-            color: '#FFF',
-            border: 'none',
-            borderRadius: 12,
-            fontSize: 16,
-            fontWeight: '600',
-            cursor: 'pointer',
-          }}
-        >
-          <Coins size={22} />
-          {sending ? 'Envoi en cours...' : 'Lancer le cycle (test)'}
-        </button>
+                    const { error: txLinkErr } = await supabase
+                      .from('transactions')
+                      .update({ machine_command_id: cmdData.id })
+                      .eq('id', txData.id);
+                    if (txLinkErr) {
+                      throw new Error(`Lien transaction/commande : ${txLinkErr.message}`);
+                    }
 
-        <button
-          onClick={async () => {
-            if (!machine?.esp32_id) return;
-            setSendError(null);
-            try {
-              const { error } = await supabase.rpc('release_machine', { p_esp32_id: machine.esp32_id });
-              if (error) throw error;
-              setMachine((m) => m ? { ...m, statut: 'disponible', estimated_end_time: null } : null);
-            } catch (err) {
-              setSendError(err instanceof Error ? err.message : 'Erreur');
-            }
-          }}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 10,
-            marginTop: 12,
-            padding: '14px 28px',
-            backgroundColor: '#059669',
-            color: '#FFF',
-            border: 'none',
-            borderRadius: 12,
-            fontSize: 16,
-            fontWeight: '600',
-            cursor: 'pointer',
-          }}
-        >
-          Libérer la machine (repasser en vert)
-        </button>
+                    await supabase
+                      .from('machines')
+                      .update({ statut: 'occupe', estimated_end_time: null })
+                      .eq('id', machine.id);
+                  } catch (err) {
+                    const msg = err instanceof Error ? err.message : String(err);
+                    setSendError(msg);
+                  } finally {
+                    setSending(false);
+                  }
+                }}
+                disabled={!machine.esp32_id || sending}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 10,
+                  padding: '12px 18px',
+                  backgroundColor: '#1C69D3',
+                  color: '#FFF',
+                  border: 'none',
+                  borderRadius: 12,
+                  fontSize: 14,
+                  fontWeight: '600',
+                  cursor: sending ? 'wait' : 'pointer',
+                }}
+              >
+                <Coins size={18} />
+                {sending ? 'Envoi en cours...' : 'Lancer un cycle de test'}
+              </button>
+            </div>
+          </div>
+
+          <div style={{ padding: 18, borderRadius: 14, border: '1px solid #A7F3D0', backgroundColor: '#ECFDF5' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 16, flexWrap: 'wrap' }}>
+              <div>
+                <p style={{ margin: '0 0 6px', fontSize: 15, fontWeight: 700, color: '#065F46' }}>Liberer la machine</p>
+                <p style={{ margin: 0, fontSize: 13, color: '#047857', maxWidth: 520 }}>
+                  Force le retour a l&apos;etat disponible si la machine est restee bloquee en occupee.
+                </p>
+              </div>
+              <button
+                onClick={async () => {
+                  if (!machine?.esp32_id) return;
+                  setSendError(null);
+                  try {
+                    const { error } = await supabase.rpc('release_machine', { p_esp32_id: machine.esp32_id });
+                    if (error) throw error;
+                    setMachine((m) => m ? { ...m, statut: 'disponible', estimated_end_time: null } : null);
+                  } catch (err) {
+                    setSendError(err instanceof Error ? err.message : 'Erreur');
+                  }
+                }}
+                style={{
+                  padding: '12px 18px',
+                  backgroundColor: '#059669',
+                  color: '#FFF',
+                  border: 'none',
+                  borderRadius: 12,
+                  fontSize: 14,
+                  fontWeight: '600',
+                  cursor: 'pointer',
+                }}
+              >
+                Repasser en disponible
+              </button>
+            </div>
+          </div>
+        </div>
       </div>
 
     </div>

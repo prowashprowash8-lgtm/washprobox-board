@@ -26,6 +26,7 @@ interface Machine {
   modele?: string;
   prix_centimes?: number;
   actif?: boolean;
+  hors_service?: boolean;
   machine_kind?: string | null;
   type?: string | null;
 }
@@ -53,6 +54,7 @@ export default function EmplacementDetail() {
     marque: '',
     modele: '',
     prix_centimes: 300,
+    actif: true,
     machine_kind: 'lavage' as MachineKind,
   });
   const [formLaverie, setFormLaverie] = useState({ name: '', address: '' });
@@ -79,7 +81,7 @@ export default function EmplacementDetail() {
     try {
       const [empRes, machRes] = await Promise.all([
         supabase.from('emplacements').select('id, name, address').eq('id', id).single(),
-        supabase.from('machines').select('id, nom, esp32_id, numero_serie, marque, modele, prix_centimes, actif, machine_kind, type').eq('emplacement_id', id),
+        supabase.from('machines').select('id, nom, esp32_id, numero_serie, marque, modele, prix_centimes, actif, hors_service, machine_kind, type').eq('emplacement_id', id),
       ]);
       if (empRes.error) throw new Error(empRes.error.message);
       setEmplacement(empRes.data ?? null);
@@ -197,6 +199,7 @@ export default function EmplacementDetail() {
         esp32_id: formMachine.esp32_id.trim(),
         emplacement_id: id,
         prix_centimes: formMachine.prix_centimes,
+        actif: formMachine.actif,
         machine_kind: formMachine.machine_kind,
         type: formMachine.machine_kind,
       };
@@ -212,6 +215,7 @@ export default function EmplacementDetail() {
         marque: '',
         modele: '',
         prix_centimes: 300,
+        actif: true,
         machine_kind: 'lavage',
       });
       await fetchData();
@@ -470,12 +474,28 @@ export default function EmplacementDetail() {
                         borderRadius: 6,
                         fontSize: 12,
                         fontWeight: '600',
-                        backgroundColor: m.actif ? '#D1E3FA' : '#FEE2E2',
-                        color: m.actif ? '#1B2430' : '#B91C1C',
+                        backgroundColor: m.actif ? '#D1E3FA' : '#F3F4F6',
+                        color: m.actif ? '#1B2430' : '#6B7280',
                       }}
                     >
-                      {m.actif ? 'Actif' : 'Inactif'}
+                      {m.actif ? 'Visible app' : 'Inactive'}
                     </span>
+                    {m.hors_service ? (
+                      <span
+                        style={{
+                          display: 'inline-block',
+                          marginLeft: 8,
+                          padding: '4px 10px',
+                          borderRadius: 6,
+                          fontSize: 12,
+                          fontWeight: '600',
+                          backgroundColor: '#FEE2E2',
+                          color: '#B91C1C',
+                        }}
+                      >
+                        Hors service
+                      </span>
+                    ) : null}
                   </div>
                 );
               })
@@ -578,6 +598,47 @@ export default function EmplacementDetail() {
                   onChange={(e) => setFormMachine((p) => ({ ...p, prix_centimes: Math.round(parseFloat(e.target.value || '0') * 100) }))}
                   style={{ width: '100%', padding: 12, border: '1px solid #E5E7EB', borderRadius: 10, fontSize: 15, boxSizing: 'border-box' }}
                 />
+              </div>
+              <div style={{ marginBottom: 24 }}>
+                <label style={{ display: 'block', marginBottom: 10, fontSize: 14, fontWeight: '500', color: '#374151' }}>
+                  Etat initial
+                </label>
+                <div style={{ display: 'flex', gap: 10 }}>
+                  <button
+                    type="button"
+                    onClick={() => setFormMachine((p) => ({ ...p, actif: true }))}
+                    style={{
+                      flex: 1,
+                      padding: '12px 14px',
+                      borderRadius: 10,
+                      border: formMachine.actif ? '2px solid #1C69D3' : '1px solid #E5E7EB',
+                      backgroundColor: formMachine.actif ? '#E8F1FC' : '#FFF',
+                      fontWeight: 600,
+                      fontSize: 14,
+                      cursor: 'pointer',
+                      color: '#111',
+                    }}
+                  >
+                    En service
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFormMachine((p) => ({ ...p, actif: false }))}
+                    style={{
+                      flex: 1,
+                      padding: '12px 14px',
+                      borderRadius: 10,
+                      border: !formMachine.actif ? '2px solid #B91C1C' : '1px solid #E5E7EB',
+                      backgroundColor: !formMachine.actif ? '#FEE2E2' : '#FFF',
+                      fontWeight: 600,
+                      fontSize: 14,
+                      cursor: 'pointer',
+                      color: '#111',
+                    }}
+                  >
+                    Hors service
+                  </button>
+                </div>
               </div>
               <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
                 <button type="button" onClick={() => setShowAddMachine(false)} style={{ padding: '12px 20px', backgroundColor: '#F5F5F5', color: '#444', border: 'none', borderRadius: 10, fontWeight: '600', cursor: 'pointer' }}>
