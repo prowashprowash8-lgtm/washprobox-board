@@ -15,6 +15,7 @@ import {
   filterTransactionsForChartWindow,
 } from '../utils/revenueStats';
 import { fetchTransactionsForRevenue } from '../utils/fetchTransactionsForRevenue';
+import { useBoardAccess } from '../contexts/BoardAccessContext';
 
 interface Machine {
   id: string;
@@ -32,6 +33,7 @@ interface Machine {
 export default function EmplacementDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { isResidence, canAccessEmplacement } = useBoardAccess();
   const [emplacement, setEmplacement] = useState<{ id: string; name: string; address?: string } | null>(null);
   const [machines, setMachines] = useState<Machine[]>([]);
   const [revenusByMachine, setRevenusByMachine] = useState<Record<string, number>>({});
@@ -60,6 +62,13 @@ export default function EmplacementDetail() {
 
   const fetchData = async () => {
     if (!id) return;
+    if (isResidence && !canAccessEmplacement(id)) {
+      setLoading(false);
+      setError('Accès refusé à cette laverie.');
+      setMachines([]);
+      setEmplacement(null);
+      return;
+    }
     setLoading(true);
     setError(null);
     setMachines([]);
@@ -89,7 +98,7 @@ export default function EmplacementDetail() {
 
   useEffect(() => {
     fetchData();
-  }, [id]);
+  }, [canAccessEmplacement, id, isResidence]);
 
   const refreshRevenue = useCallback(
     async (showSpinner = true) => {
@@ -279,24 +288,26 @@ export default function EmplacementDetail() {
           <h1 style={{ fontSize: 28, fontWeight: '700', color: '#000', margin: '0 0 8px' }}>{emplacement.name}</h1>
           {emplacement.address && <p style={{ margin: 0, fontSize: 14, color: '#666' }}>{emplacement.address}</p>}
         </div>
-        <div style={{ display: 'flex', gap: 10 }}>
-          <button
-            onClick={() => setShowAddMachine(true)}
-            style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 20px', backgroundColor: '#1C69D3', color: '#FFF', border: 'none', borderRadius: 10, fontWeight: '600', cursor: 'pointer', fontSize: 15 }}
-          >
-            <Plus size={20} /> Créer une machine
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setDeleteError(null);
-              setShowParams(true);
-            }}
-            style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 20px', backgroundColor: '#F5F5F5', color: '#444', border: 'none', borderRadius: 10, fontWeight: '600', cursor: 'pointer', fontSize: 15 }}
-          >
-            <Settings size={20} /> Paramètres laverie
-          </button>
-        </div>
+        {!isResidence && (
+          <div style={{ display: 'flex', gap: 10 }}>
+            <button
+              onClick={() => setShowAddMachine(true)}
+              style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 20px', backgroundColor: '#1C69D3', color: '#FFF', border: 'none', borderRadius: 10, fontWeight: '600', cursor: 'pointer', fontSize: 15 }}
+            >
+              <Plus size={20} /> Créer une machine
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setDeleteError(null);
+                setShowParams(true);
+              }}
+              style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 20px', backgroundColor: '#F5F5F5', color: '#444', border: 'none', borderRadius: 10, fontWeight: '600', cursor: 'pointer', fontSize: 15 }}
+            >
+              <Settings size={20} /> Paramètres laverie
+            </button>
+          </div>
+        )}
       </div>
 
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16, marginTop: 8, marginBottom: 24 }}>
@@ -386,7 +397,7 @@ export default function EmplacementDetail() {
                 <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
                 <XAxis dataKey="label" tick={{ fontSize: 12, fill: '#666' }} stroke="#9CA3AF" />
                 <YAxis tick={{ fontSize: 12, fill: '#666' }} stroke="#9CA3AF" tickFormatter={(v) => `${v} €`} />
-                <Tooltip formatter={(v: number) => `${Number(v).toFixed(2)} €`} />
+                <Tooltip formatter={(v) => `${Number(v ?? 0).toFixed(2)} €`} />
                 <Line type="monotone" dataKey="montant" stroke="#1C69D3" strokeWidth={2} dot={{ fill: '#1C69D3', r: 4 }} activeDot={{ r: 6 }} />
               </LineChart>
             </ResponsiveContainer>
@@ -394,84 +405,86 @@ export default function EmplacementDetail() {
         )}
       </div>
 
-      <div style={{ marginTop: 32 }}>
-        <h2 style={{ fontSize: 16, fontWeight: '600', margin: '0 0 16px', paddingBottom: 12, borderBottom: '2px solid #1C69D3' }}>Appareils</h2>
-        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 20 }}>
-          {machines.length === 0 ? (
-            <div style={{ padding: 40, backgroundColor: '#F9FAFB', borderRadius: 12, border: '1px dashed #E5E7EB', color: '#6B7280', fontSize: 14 }}>
-              Aucune machine. Cliquez sur "Créer une machine" pour en ajouter.
-            </div>
-          ) : (
-            machines.map((m) => {
-              const prixEur = (m.prix_centimes ?? 300) / 100;
-              return (
-                <div
-                  key={m.id}
-                  onClick={() => navigate(`/machines/${m.id}`)}
-                  style={{
-                    padding: 20,
-                    backgroundColor: '#FFF',
-                    borderRadius: 12,
-                    border: '1px solid #EEE',
-                    cursor: 'pointer',
-                    boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
-                    transition: 'box-shadow 0.2s, border-color 0.2s',
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.08)';
-                    e.currentTarget.style.borderColor = '#1C69D3';
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.04)';
-                    e.currentTarget.style.borderColor = '#EEE';
-                  }}
-                >
-                  <div style={{ margin: '0 0 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
-                    <h3 style={{ margin: 0, fontSize: 17, fontWeight: '600', color: '#000' }}>{m.nom}</h3>
-                    <span
-                      style={{
-                        fontSize: 11,
-                        fontWeight: 700,
-                        textTransform: 'uppercase',
-                        letterSpacing: 0.4,
-                        padding: '4px 10px',
-                        borderRadius: 6,
-                        backgroundColor: inferMachineKind(m) === 'sechage' ? '#FEF3C7' : '#D1E3FA',
-                        color: inferMachineKind(m) === 'sechage' ? '#92400E' : '#1B2430',
-                      }}
-                    >
-                      {inferMachineKind(m) === 'sechage' ? 'Sèche-linge' : 'Lave-linge'}
-                    </span>
-                  </div>
-                  <div style={{ padding: '12px 0', borderTop: '1px solid #F0F0F0', borderBottom: '1px solid #F0F0F0', marginBottom: 12 }}>
-                    <p style={{ margin: '0 0 6px', fontSize: 13, color: '#666' }}>{PERIODE_LABELS[periode]}</p>
-                    <p style={{ margin: 0, fontSize: 18, fontWeight: '700', color: '#000' }}>
-                      {revenueLoading ? '…' : `${(revenusByMachine[m.id] ?? 0).toFixed(2)} EUR`}
-                    </p>
-                    <p style={{ margin: '12px 0 0', fontSize: 13, color: '#666' }}>Prix du cycle</p>
-                    <p style={{ margin: '4px 0 0', fontSize: 16, fontWeight: '600', color: '#000' }}>{prixEur.toFixed(2)} EUR</p>
-                  </div>
-                  <span
+      {!isResidence && (
+        <div style={{ marginTop: 32 }}>
+          <h2 style={{ fontSize: 16, fontWeight: '600', margin: '0 0 16px', paddingBottom: 12, borderBottom: '2px solid #1C69D3' }}>Appareils</h2>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 20 }}>
+            {machines.length === 0 ? (
+              <div style={{ padding: 40, backgroundColor: '#F9FAFB', borderRadius: 12, border: '1px dashed #E5E7EB', color: '#6B7280', fontSize: 14 }}>
+                Aucune machine. Cliquez sur "Créer une machine" pour en ajouter.
+              </div>
+            ) : (
+              machines.map((m) => {
+                const prixEur = (m.prix_centimes ?? 300) / 100;
+                return (
+                  <div
+                    key={m.id}
+                    onClick={() => navigate(`/machines/${m.id}`)}
                     style={{
-                      display: 'inline-block',
-                      padding: '4px 10px',
-                      borderRadius: 6,
-                      fontSize: 12,
-                      fontWeight: '600',
-                      backgroundColor: m.actif ? '#D1E3FA' : '#FEE2E2',
-                      color: m.actif ? '#1B2430' : '#B91C1C',
+                      padding: 20,
+                      backgroundColor: '#FFF',
+                      borderRadius: 12,
+                      border: '1px solid #EEE',
+                      cursor: 'pointer',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.04)',
+                      transition: 'box-shadow 0.2s, border-color 0.2s',
+                    }}
+                    onMouseEnter={(e) => {
+                      e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.08)';
+                      e.currentTarget.style.borderColor = '#1C69D3';
+                    }}
+                    onMouseLeave={(e) => {
+                      e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.04)';
+                      e.currentTarget.style.borderColor = '#EEE';
                     }}
                   >
-                    {m.actif ? 'Actif' : 'Inactif'}
-                  </span>
-                </div>
-              );
-            })
-          )}
+                    <div style={{ margin: '0 0 12px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8, flexWrap: 'wrap' }}>
+                      <h3 style={{ margin: 0, fontSize: 17, fontWeight: '600', color: '#000' }}>{m.nom}</h3>
+                      <span
+                        style={{
+                          fontSize: 11,
+                          fontWeight: 700,
+                          textTransform: 'uppercase',
+                          letterSpacing: 0.4,
+                          padding: '4px 10px',
+                          borderRadius: 6,
+                          backgroundColor: inferMachineKind(m) === 'sechage' ? '#FEF3C7' : '#D1E3FA',
+                          color: inferMachineKind(m) === 'sechage' ? '#92400E' : '#1B2430',
+                        }}
+                      >
+                        {inferMachineKind(m) === 'sechage' ? 'Sèche-linge' : 'Lave-linge'}
+                      </span>
+                    </div>
+                    <div style={{ padding: '12px 0', borderTop: '1px solid #F0F0F0', borderBottom: '1px solid #F0F0F0', marginBottom: 12 }}>
+                      <p style={{ margin: '0 0 6px', fontSize: 13, color: '#666' }}>{PERIODE_LABELS[periode]}</p>
+                      <p style={{ margin: 0, fontSize: 18, fontWeight: '700', color: '#000' }}>
+                        {revenueLoading ? '…' : `${(revenusByMachine[m.id] ?? 0).toFixed(2)} EUR`}
+                      </p>
+                      <p style={{ margin: '12px 0 0', fontSize: 13, color: '#666' }}>Prix du cycle</p>
+                      <p style={{ margin: '4px 0 0', fontSize: 16, fontWeight: '600', color: '#000' }}>{prixEur.toFixed(2)} EUR</p>
+                    </div>
+                    <span
+                      style={{
+                        display: 'inline-block',
+                        padding: '4px 10px',
+                        borderRadius: 6,
+                        fontSize: 12,
+                        fontWeight: '600',
+                        backgroundColor: m.actif ? '#D1E3FA' : '#FEE2E2',
+                        color: m.actif ? '#1B2430' : '#B91C1C',
+                      }}
+                    >
+                      {m.actif ? 'Actif' : 'Inactif'}
+                    </span>
+                  </div>
+                );
+              })
+            )}
+          </div>
         </div>
-      </div>
+      )}
 
-      {showAddMachine && (
+      {!isResidence && showAddMachine && (
         <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => setShowAddMachine(false)}>
           <div style={{ backgroundColor: '#FFF', borderRadius: 16, padding: 32, width: '100%', maxWidth: 400 }} onClick={(e) => e.stopPropagation()}>
             <h3 style={{ margin: '0 0 20px', fontSize: 18, fontWeight: '600', color: '#000' }}>Créer une machine</h3>
@@ -579,7 +592,7 @@ export default function EmplacementDetail() {
         </div>
       )}
 
-      {showParams && (
+      {!isResidence && showParams && (
         <div
           style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }}
           onClick={() => {

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { fetchTransactionsForRevenue } from '../utils/fetchTransactionsForRevenue';
 import { Plus } from 'lucide-react';
+import { useBoardAccess } from '../contexts/BoardAccessContext';
 
 interface EmplacementRow {
   id: string;
@@ -15,6 +16,7 @@ interface EmplacementRow {
 
 export default function Emplacements() {
   const navigate = useNavigate();
+  const { isResidence, allowedEmplacementIds } = useBoardAccess();
   const [rows, setRows] = useState<EmplacementRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -37,13 +39,26 @@ export default function Emplacements() {
     setLoading(true);
     setError(null);
     try {
-      const { data: emplacements, error: empErr } = await supabase
+      if (isResidence && allowedEmplacementIds.length === 0) {
+        setRows([]);
+        return;
+      }
+
+      let emplacementsQuery = supabase
         .from('emplacements')
         .select('id, name, address, created_at')
         .order('created_at', { ascending: false });
+      if (isResidence) {
+        emplacementsQuery = emplacementsQuery.in('id', allowedEmplacementIds);
+      }
+      const { data: emplacements, error: empErr } = await emplacementsQuery;
       if (empErr) throw new Error(empErr.message);
 
-      const { data: machines, error: machErr } = await supabase.from('machines').select('id, emplacement_id');
+      let machinesQuery = supabase.from('machines').select('id, emplacement_id');
+      if (isResidence) {
+        machinesQuery = machinesQuery.in('emplacement_id', allowedEmplacementIds);
+      }
+      const { data: machines, error: machErr } = await machinesQuery;
       if (machErr) throw new Error(machErr.message);
 
       const thirtyDaysAgo = new Date();
@@ -54,6 +69,9 @@ export default function Emplacements() {
       const transactions = await fetchTransactionsForRevenue(supabase, {
         startIso: startDate,
         endIso: endDate,
+        machineIds: (machines ?? [])
+          .map((m: { id?: string | null }) => m.id ?? '')
+          .filter(Boolean),
       });
 
       const machineToEmp: Record<string, string> = {};
@@ -88,7 +106,7 @@ export default function Emplacements() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [allowedEmplacementIds, isResidence]);
 
   useEffect(() => {
     fetchData();
@@ -178,15 +196,17 @@ export default function Emplacements() {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 16, marginBottom: 24 }}>
         <h1 style={{ fontSize: 28, fontWeight: '700', color: '#000', margin: 0 }}>Emplacements</h1>
-        <button
-          onClick={() => { setAddError(null); setForm({ name: '', address: '' }); setAddressSuggestions([]); setShowAdd(true); }}
-          style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 20px', backgroundColor: '#1C69D3', color: '#FFF', border: 'none', borderRadius: 10, fontWeight: '600', cursor: 'pointer', fontSize: 15 }}
-        >
-          <Plus size={20} /> Créer une laverie
-        </button>
+        {!isResidence && (
+          <button
+            onClick={() => { setAddError(null); setForm({ name: '', address: '' }); setAddressSuggestions([]); setShowAdd(true); }}
+            style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 20px', backgroundColor: '#1C69D3', color: '#FFF', border: 'none', borderRadius: 10, fontWeight: '600', cursor: 'pointer', fontSize: 15 }}
+          >
+            <Plus size={20} /> Créer une laverie
+          </button>
+        )}
       </div>
 
-      {showAdd && (
+      {!isResidence && showAdd && (
         <div style={{ position: 'fixed', inset: 0, backgroundColor: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 1000 }} onClick={() => setShowAdd(false)}>
           <div style={{ backgroundColor: '#FFF', borderRadius: 16, padding: 32, width: '100%', maxWidth: 400 }} onClick={(e) => e.stopPropagation()}>
             <h3 style={{ margin: '0 0 20px', fontSize: 18, fontWeight: '600', color: '#000' }}>Nouvelle laverie</h3>
@@ -297,7 +317,7 @@ export default function Emplacements() {
             {rows.length === 0 ? (
               <tr>
                 <td colSpan={4} style={{ padding: 40, textAlign: 'center', color: '#666' }}>
-                  Aucun emplacement. Cliquez pour en ajouter.
+                  {isResidence ? 'Aucune laverie attribuée à ce compte.' : 'Aucun emplacement. Cliquez pour en ajouter.'}
                 </td>
               </tr>
             ) : (

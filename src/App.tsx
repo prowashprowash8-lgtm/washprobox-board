@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Routes, Route, NavLink, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Receipt, MapPin, Tablet, Settings, Users, Megaphone, Target, LogOut, RotateCcw } from 'lucide-react';
+import { Routes, Route, NavLink, Navigate, useNavigate } from 'react-router-dom';
+import { LayoutDashboard, Receipt, MapPin, Tablet, Settings, Users, Megaphone, Target, LogOut, RotateCcw, KeyRound } from 'lucide-react';
 import Accueil from './pages/Accueil';
 import Appareils from './pages/Appareils';
 import Emplacements from './pages/Emplacements';
@@ -13,29 +13,36 @@ import Remboursements from './pages/Remboursements';
 import Utilisateurs from './pages/Utilisateurs';
 import ProfileDetail from './pages/ProfileDetail';
 import Login from './pages/Login';
+import GerantsResidences from './pages/GerantsResidences';
 import { useAuth } from './contexts/AuthContext';
+import { useBoardAccess } from './contexts/BoardAccessContext';
 import { supabase } from './supabaseClient';
 
 function App() {
   const { user, loading, signOut } = useAuth();
+  const { loading: accessLoading, isPatron, isResidence } = useBoardAccess();
   const navigate = useNavigate();
   const [pendingRefundCount, setPendingRefundCount] = useState(0);
 
   const fetchPendingRefundCount = useCallback(async () => {
+    if (!isPatron) {
+      setPendingRefundCount(0);
+      return;
+    }
     const { count, error } = await supabase
       .from('refund_requests')
       .select('*', { count: 'exact', head: true })
       .eq('statut', 'pending');
     if (!error) setPendingRefundCount(count ?? 0);
-  }, []);
+  }, [isPatron]);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || !isPatron) return;
     fetchPendingRefundCount();
-  }, [user, fetchPendingRefundCount]);
+  }, [user, isPatron, fetchPendingRefundCount]);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || !isPatron) return;
     const channel = supabase
       .channel('sidebar-refund-requests')
       .on(
@@ -49,24 +56,24 @@ function App() {
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [user, fetchPendingRefundCount]);
+  }, [user, isPatron, fetchPendingRefundCount]);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || !isPatron) return;
     const onVis = () => {
       if (document.visibilityState === 'visible') fetchPendingRefundCount();
     };
     document.addEventListener('visibilitychange', onVis);
     return () => document.removeEventListener('visibilitychange', onVis);
-  }, [user, fetchPendingRefundCount]);
+  }, [user, isPatron, fetchPendingRefundCount]);
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || !isPatron) return;
     const t = setInterval(() => fetchPendingRefundCount(), 45_000);
     return () => clearInterval(t);
-  }, [user, fetchPendingRefundCount]);
+  }, [user, isPatron, fetchPendingRefundCount]);
 
-  if (loading) {
+  if (loading || accessLoading) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', height: '100%', backgroundColor: '#F8F9FA' }}>
         <p style={{ color: '#666', fontSize: 16 }}>Chargement...</p>
@@ -111,15 +118,20 @@ function App() {
         </div>
         <nav style={{ display: 'flex', flexDirection: 'column', gap: 15, flex: 1 }}>
           <MenuLink icon={<LayoutDashboard size={20}/>} label="Accueil" to="/" />
-          <MenuLink icon={<Receipt size={20}/>} label="Transactions" to="/transactions" />
           <MenuLink icon={<MapPin size={20}/>} label="Emplacements" to="/emplacements" />
-          <MenuLink icon={<Tablet size={20}/>} label="Appareils" to="/appareils" />
-          <MenuLink icon={<Megaphone size={20}/>} label="Marketing" to="/marketing" />
-          <MenuLink icon={<Target size={20}/>} label="Missions" to="/missions" />
-          <MenuLink icon={<RotateCcw size={20}/>} label="Remboursements" to="/remboursements" badge={pendingRefundCount} />
-          <hr style={{ width: '100%', border: '0.5px solid #F0F0F0', margin: '10px 0' }} />
-          <MenuLink icon={<Users size={20}/>} label="Utilisateurs" to="/utilisateurs" />
-          <MenuLink icon={<Settings size={20}/>} label="Configuration" to="/configuration" />
+          {isPatron && (
+            <>
+              <MenuLink icon={<Receipt size={20}/>} label="Transactions" to="/transactions" />
+              <MenuLink icon={<Tablet size={20}/>} label="Appareils" to="/appareils" />
+              <MenuLink icon={<Megaphone size={20}/>} label="Marketing" to="/marketing" />
+              <MenuLink icon={<Target size={20}/>} label="Missions" to="/missions" />
+              <MenuLink icon={<RotateCcw size={20}/>} label="Remboursements" to="/remboursements" badge={pendingRefundCount} />
+              <hr style={{ width: '100%', border: '0.5px solid #F0F0F0', margin: '10px 0' }} />
+              <MenuLink icon={<Users size={20}/>} label="Utilisateurs" to="/utilisateurs" />
+              <MenuLink icon={<KeyRound size={20}/>} label="Gérants de résidences" to="/gerants-residences" />
+              <MenuLink icon={<Settings size={20}/>} label="Configuration" to="/configuration" />
+            </>
+          )}
         </nav>
         <button
           onClick={() => signOut().then(() => navigate('/'))}
@@ -156,17 +168,23 @@ function App() {
       >
         <Routes>
           <Route path="/" element={<Accueil />} />
-          <Route path="/appareils" element={<Appareils />} />
-          <Route path="/transactions" element={<Transactions />} />
           <Route path="/emplacements" element={<Emplacements />} />
           <Route path="/emplacements/:id" element={<EmplacementDetail />} />
-          <Route path="/machines/:id" element={<MachineDetail />} />
-          <Route path="/marketing" element={<Marketing />} />
-          <Route path="/missions" element={<Missions />} />
-          <Route path="/remboursements" element={<Remboursements />} />
-          <Route path="/utilisateurs" element={<Utilisateurs />} />
-          <Route path="/utilisateurs/:id" element={<ProfileDetail />} />
-          <Route path="/configuration" element={<Placeholder title="Configuration" />} />
+          {isPatron ? (
+            <>
+              <Route path="/appareils" element={<Appareils />} />
+              <Route path="/transactions" element={<Transactions />} />
+              <Route path="/machines/:id" element={<MachineDetail />} />
+              <Route path="/marketing" element={<Marketing />} />
+              <Route path="/missions" element={<Missions />} />
+              <Route path="/remboursements" element={<Remboursements />} />
+              <Route path="/utilisateurs" element={<Utilisateurs />} />
+              <Route path="/utilisateurs/:id" element={<ProfileDetail />} />
+              <Route path="/gerants-residences" element={<GerantsResidences />} />
+              <Route path="/configuration" element={<Placeholder title="Configuration" />} />
+            </>
+          ) : null}
+          <Route path="*" element={<Navigate to={isResidence ? '/emplacements' : '/'} replace />} />
         </Routes>
       </div>
     </div>

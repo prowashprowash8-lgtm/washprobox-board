@@ -34,7 +34,7 @@ function mapRpcRowsToTransactions(txData: Record<string, unknown>[]): Transactio
     created_at: String(t.created_at),
     machine_nom: (t.machine_name as string) || '—',
     emplacement_name: (t.emplacement_name as string) || '—',
-    user_name: (t.user_name && String(t.user_name).trim()) || '—',
+    user_name: typeof t.user_name === 'string' && t.user_name.trim() ? t.user_name.trim() : '—',
   }));
 }
 

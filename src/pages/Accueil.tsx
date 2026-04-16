@@ -12,8 +12,10 @@ import {
   filterTransactionsForChartWindow,
 } from '../utils/revenueStats';
 import { fetchTransactionsForRevenue } from '../utils/fetchTransactionsForRevenue';
+import { useBoardAccess } from '../contexts/BoardAccessContext';
 
 export default function Accueil() {
+  const { isResidence, allowedEmplacementIds } = useBoardAccess();
   const [periode, setPeriode] = useState<Periode>('mois');
   const [ca, setCa] = useState<number | null>(null);
   const [nbAppareils, setNbAppareils] = useState<number>(0);
@@ -25,17 +27,32 @@ export default function Accueil() {
     if (showLoading) setLoading(true);
     setError(null);
     try {
-      const { count, error: machinesError } = await supabase
+      if (isResidence && allowedEmplacementIds.length === 0) {
+        setNbAppareils(0);
+        setCa(0);
+        setChartData([]);
+        return;
+      }
+
+      let machinesQuery = supabase
         .from('machines')
-        .select('*', { count: 'exact', head: true });
+        .select('id, emplacement_id', { count: 'exact' });
+      if (isResidence) {
+        machinesQuery = machinesQuery.in('emplacement_id', allowedEmplacementIds);
+      }
+      const { data: machinesData, count, error: machinesError } = await machinesQuery;
       if (machinesError) throw machinesError;
       setNbAppareils(count ?? 0);
 
       const { startIso, endIso, chartStart, chartEnd } = getRevenueQueryIsoRange(periode);
+      const machineIds = (machinesData ?? [])
+        .map((m: { id?: string | null }) => m.id ?? '')
+        .filter(Boolean);
 
       const raw = await fetchTransactionsForRevenue(supabase, {
         startIso,
         endIso,
+        machineIds: isResidence ? machineIds : undefined,
       });
       const rows = filterTransactionsForChartWindow(raw, chartStart, chartEnd, periode);
       setCa(sumRevenue(rows));
@@ -47,7 +64,7 @@ export default function Accueil() {
     } finally {
       setLoading(false);
     }
-  }, [periode]);
+  }, [allowedEmplacementIds, isResidence, periode]);
 
   useEffect(() => {
     fetchStats(true);
@@ -86,7 +103,9 @@ export default function Accueil() {
         <div>
           <h1 style={{ fontSize: 28, fontWeight: '700', color: '#000', margin: 0 }}>Bienvenue Victor !</h1>
           <p style={{ color: '#666', margin: '8px 0 0' }}>
-            Statistiques de vos appareils connectés (ESP32). Revenus = cartes + portefeuille (hors codes promo gratuits).
+            {isResidence
+              ? 'Vue résidence : uniquement vos laveries et leur chiffre d’affaires.'
+              : 'Statistiques de vos appareils connectés (ESP32). Revenus = cartes + portefeuille (hors codes promo gratuits).'}
             <span style={{ display: 'block', marginTop: 6, fontSize: 13, color: '#999' }}>
               « Aujourd’hui » = uniquement le jour en cours. Pour inclure les paiements d’hier, utilisez « Ce mois » ou « Cette année ».
             </span>
@@ -183,7 +202,7 @@ export default function Accueil() {
                 <CartesianGrid strokeDasharray="3 3" stroke="#E5E7EB" />
                 <XAxis dataKey="label" tick={{ fontSize: 12, fill: '#666' }} stroke="#9CA3AF" />
                 <YAxis tick={{ fontSize: 12, fill: '#666' }} stroke="#9CA3AF" tickFormatter={(v) => `${v} €`} />
-                <Tooltip formatter={(v: number) => `${Number(v).toFixed(2)} €`} />
+                <Tooltip formatter={(v) => `${Number(v ?? 0).toFixed(2)} €`} />
                 <Line type="monotone" dataKey="montant" stroke="#1C69D3" strokeWidth={2} dot={{ fill: '#1C69D3', r: 4 }} activeDot={{ r: 6 }} />
               </LineChart>
             </ResponsiveContainer>

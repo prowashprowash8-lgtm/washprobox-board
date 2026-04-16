@@ -24,13 +24,23 @@ export default function Utilisateurs() {
 
   useEffect(() => {
     const fetch = async () => {
-      const { data, error: fetchErr } = await supabase.from('profiles').select('*');
+      const [{ data, error: fetchErr }, { data: boardRoles, error: boardRolesErr }] = await Promise.all([
+        supabase.from('profiles').select('*'),
+        supabase.from('board_account_roles').select('user_id'),
+      ]);
       if (fetchErr) {
         setError(fetchErr.message);
         setProfiles([]);
+      } else if (boardRolesErr) {
+        setError(boardRolesErr.message);
+        setProfiles([]);
       } else {
         setError(null);
-        const sorted = (data ?? []).sort((a: Profile, b: Profile) => {
+        const boardIds = new Set(
+          (boardRoles ?? []).map((r: { user_id?: string | null }) => r.user_id ?? '').filter(Boolean)
+        );
+        const filtered = (data ?? []).filter((p: Profile) => !boardIds.has(p.id));
+        const sorted = filtered.sort((a: Profile, b: Profile) => {
           const da = a.created_at ? new Date(a.created_at).getTime() : 0;
           const db = b.created_at ? new Date(b.created_at).getTime() : 0;
           return db - da;
@@ -58,7 +68,9 @@ export default function Utilisateurs() {
   return (
     <div>
       <h1 style={{ fontSize: 28, fontWeight: '700', color: '#000', margin: '0 0 8px' }}>Utilisateurs</h1>
-      <p style={{ color: '#666', margin: '0 0 32px' }}>Personnes ayant créé un compte sur l&apos;application.</p>
+      <p style={{ color: '#666', margin: '0 0 32px' }}>
+        Personnes ayant créé un compte sur l&apos;application. Les comptes d&apos;accès au board sont gérés séparément.
+      </p>
 
       <div style={{ backgroundColor: '#FFF', borderRadius: 16, border: '1px solid #EEE', overflow: 'hidden' }}>
         {profiles.length === 0 ? (
