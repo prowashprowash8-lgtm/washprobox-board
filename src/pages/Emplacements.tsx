@@ -14,6 +14,12 @@ interface EmplacementRow {
   revenu30Jours: number;
 }
 
+interface AddressSuggestion {
+  label: string;
+  latitude: number | null;
+  longitude: number | null;
+}
+
 export default function Emplacements() {
   const navigate = useNavigate();
   const { isResidence, allowedEmplacementIds } = useBoardAccess();
@@ -23,10 +29,11 @@ export default function Emplacements() {
   const [showAdd, setShowAdd] = useState(false);
   const [saving, setSaving] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
-  const [form, setForm] = useState({ name: '', address: '' });
-  const [addressSuggestions, setAddressSuggestions] = useState<string[]>([]);
+  const [form, setForm] = useState({ name: '', address: '', latitude: null as number | null, longitude: null as number | null });
+  const [addressSuggestions, setAddressSuggestions] = useState<AddressSuggestion[]>([]);
   const [addressLoading, setAddressLoading] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [geocodeNotice, setGeocodeNotice] = useState<string | null>(null);
   const addressDebounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const formatDate = (iso: string) => {
@@ -123,8 +130,17 @@ export default function Emplacements() {
         `https://api-adresse.data.gouv.fr/search/?q=${encodeURIComponent(query.trim())}&limit=5`
       );
       const data = await res.json();
-      const labels = (data.features ?? []).map((f: { properties?: { label?: string } }) => f.properties?.label).filter(Boolean);
-      setAddressSuggestions(labels);
+      const suggestions = (data.features ?? []).map((f: { properties?: { label?: string }; geometry?: { coordinates?: number[] } }) => {
+        const label = f.properties?.label ?? '';
+        const lng = Number(f.geometry?.coordinates?.[0]);
+        const lat = Number(f.geometry?.coordinates?.[1]);
+        return {
+          label,
+          latitude: Number.isFinite(lat) ? lat : null,
+          longitude: Number.isFinite(lng) ? lng : null,
+        };
+      }).filter((s: AddressSuggestion) => Boolean(s.label));
+      setAddressSuggestions(suggestions);
     } catch {
       setAddressSuggestions([]);
     } finally {
@@ -133,7 +149,8 @@ export default function Emplacements() {
   }, []);
 
   const handleAddressChange = useCallback((value: string) => {
-    setForm((p) => ({ ...p, address: value }));
+    setForm((p) => ({ ...p, address: value, latitude: null, longitude: null }));
+    setGeocodeNotice(null);
     setShowSuggestions(true);
     if (addressDebounceRef.current) clearTimeout(addressDebounceRef.current);
     if (value.trim().length < 3) {
@@ -145,8 +162,18 @@ export default function Emplacements() {
     }, 300);
   }, [fetchAddressSuggestions]);
 
-  const handleAddressSelect = useCallback((address: string) => {
-    setForm((p) => ({ ...p, address }));
+  const handleAddressSelect = useCallback((suggestion: AddressSuggestion) => {
+    setForm((p) => ({
+      ...p,
+      address: suggestion.label,
+      latitude: suggestion.latitude,
+      longitude: suggestion.longitude,
+    }));
+    if (suggestion.latitude != null && suggestion.longitude != null) {
+      setGeocodeNotice(`Coordonnées détectées: ${suggestion.latitude.toFixed(6)}, ${suggestion.longitude.toFixed(6)}`);
+    } else {
+      setGeocodeNotice('Coordonnées non trouvées automatiquement pour cette adresse.');
+    }
     setAddressSuggestions([]);
     setShowSuggestions(false);
   }, []);
@@ -163,16 +190,54 @@ export default function Emplacements() {
     setSaving(true);
     setAddError(null);
     try {
-      const { data, error: insertErr } = await supabase
+      let latitude = form.latitude;
+      let longitude = form.longitude;
+      if ((latitude == null || longitude == null) && form.address.trim().length >= 3) {
+        try {
+          const res = await fetch(
+            `https://api-adresse.data.gouv.fr/search/?q=${encodeURIComponent(form.address.trim())}&limit=1`
+          );
+          const dataGeo = await res.json();
+          const first = dataGeo?.features?.[0];
+          const lng = Number(first?.geometry?.coordinates?.[0]);
+          const lat = Number(first?.geometry?.coordinates?.[1]);
+          if (Number.isFinite(lat) && Number.isFinite(lng)) {
+            latitude = lat;
+            longitude = lng;
+            setGeocodeNotice(`Coordonnées détectées: ${lat.toFixed(6)}, ${lng.toFixed(6)}`);
+          }
+        } catch {
+          // géocodage optionnel, ne bloque pas la création
+        }
+      }
+
+      const payload: Record<string, unknown> = {
+        name: form.name.trim(),
+        address: form.address.trim() || null,
+      };
+      if (latitude != null && longitude != null) {
+        payload.latitude = latitude;
+        payload.longitude = longitude;
+      }
+
+      let { data, error: insertErr } = await supabase
         .from('emplacements')
-        .insert({ name: form.name.trim(), address: form.address.trim() || null })
+        .insert(payload)
         .select('id')
         .single();
+      if (insertErr && (insertErr.message.includes('latitude') || insertErr.message.includes('longitude'))) {
+        ({ data, error: insertErr } = await supabase
+          .from('emplacements')
+          .insert({ name: form.name.trim(), address: form.address.trim() || null })
+          .select('id')
+          .single());
+      }
       if (insertErr) throw insertErr;
       setShowAdd(false);
-      setForm({ name: '', address: '' });
+      setForm({ name: '', address: '', latitude: null, longitude: null });
       setAddressSuggestions([]);
       setShowSuggestions(false);
+      setGeocodeNotice(null);
       await fetchData();
       if (data?.id) navigate(`/emplacements/${data.id}`);
     } catch (err) {
@@ -198,7 +263,7 @@ export default function Emplacements() {
         <h1 style={{ fontSize: 28, fontWeight: '700', color: '#000', margin: 0 }}>Emplacements</h1>
         {!isResidence && (
           <button
-            onClick={() => { setAddError(null); setForm({ name: '', address: '' }); setAddressSuggestions([]); setShowAdd(true); }}
+            onClick={() => { setAddError(null); setGeocodeNotice(null); setForm({ name: '', address: '', latitude: null, longitude: null }); setAddressSuggestions([]); setShowAdd(true); }}
             style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 20px', backgroundColor: '#1C69D3', color: '#FFF', border: 'none', borderRadius: 10, fontWeight: '600', cursor: 'pointer', fontSize: 15 }}
           >
             <Plus size={20} /> Créer une laverie
@@ -261,7 +326,7 @@ export default function Emplacements() {
                   >
                     {addressSuggestions.map((addr) => (
                       <li
-                        key={addr}
+                        key={addr.label}
                         onClick={() => handleAddressSelect(addr)}
                         style={{
                           padding: '12px 14px',
@@ -276,10 +341,13 @@ export default function Emplacements() {
                           e.currentTarget.style.backgroundColor = '#FFF';
                         }}
                       >
-                        {addr}
+                        {addr.label}
                       </li>
                     ))}
                   </ul>
+                )}
+                {geocodeNotice && (
+                  <p style={{ margin: '8px 0 0', fontSize: 12, color: '#1F2937' }}>{geocodeNotice}</p>
                 )}
               </div>
               <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>

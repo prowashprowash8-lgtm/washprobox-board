@@ -16,44 +16,17 @@ as $$
 declare
   r record;
   new_id uuid;
-  a text;
-  cp text;
-  v text;
 begin
   for r in
-    select e.id as eid, e.name, e.address
+    select e.id as eid, e.name, e.address, l.crm_site_id
     from public.emplacements e
-    where not exists (
-      select 1 from public.crm_laverie_links l where l.emplacement_id = e.id
-    )
+    left join public.crm_laverie_links l on l.emplacement_id = e.id
+    where l.emplacement_id is null
+       or coalesce(nullif(trim(l.crm_site_id), ''), '') = ''
   loop
     new_id := null;
     begin
-      select adresse, code_postal, ville
-        into a, cp, v
-      from public.map_board_address_to_laverie_fields(r.address);
-
-      insert into public.laveries (
-        nom,
-        adresse,
-        code_postal,
-        ville,
-        telephone,
-        email,
-        latitude,
-        longitude
-      )
-      values (
-        r.name,
-        a,
-        cp,
-        v,
-        null,
-        null,
-        null,
-        null
-      )
-      returning id into new_id;
+      new_id := public.insert_crm_laverie_from_board(r.eid, r.name, r.address);
 
       insert into public.crm_laverie_links (
         emplacement_id,
@@ -68,7 +41,13 @@ begin
         'synced',
         now(),
         null
-      );
+      )
+      on conflict (emplacement_id)
+      do update set
+        crm_site_id = excluded.crm_site_id,
+        sync_status = 'synced',
+        synced_at = now(),
+        last_error = null;
 
       emplacement_id := r.eid;
       laverie_id := new_id;
@@ -79,6 +58,13 @@ begin
         if new_id is not null then
           delete from public.laveries where id = new_id;
         end if;
+        update public.crm_laverie_links as l
+        set
+          sync_status = 'failed',
+          last_error = sqlerrm,
+          attempt_count = coalesce(l.attempt_count, 0) + 1,
+          updated_at = now()
+        where l.emplacement_id = r.eid;
         emplacement_id := r.eid;
         laverie_id := null;
         status := sqlerrm;

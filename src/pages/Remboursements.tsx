@@ -108,10 +108,15 @@ export default function Remboursements() {
     setUpdating(null);
     if (error) {
       console.error(error);
+      window.alert(`Erreur lors du traitement: ${error.message}`);
       return;
     }
     const payload = data as { success?: boolean; compensation_promo_code?: string | null } | null;
-    if (payload && payload.success === false) return;
+    if (payload && payload.success === false) {
+      const err = (payload as any).error || 'unknown_error';
+      window.alert(`Traitement refusé: ${err}`);
+      return;
+    }
     setRequests((prev) =>
       prev.map((r) =>
         r.id === id

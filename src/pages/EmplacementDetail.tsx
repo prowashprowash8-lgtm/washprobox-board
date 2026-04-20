@@ -31,6 +31,29 @@ interface Machine {
   type?: string | null;
 }
 
+interface HistoriqueRow {
+  id: string;
+  date_intervention: string;
+  motif: string;
+  compte_rendu: string;
+  pieces_changees: string | null;
+  description: string | null;
+  created_at?: string | null;
+}
+
+function formatDateTimeFr(value?: string | null): string {
+  if (!value) return '—';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return value;
+  return d.toLocaleString('fr-FR', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
 export default function EmplacementDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -61,6 +84,9 @@ export default function EmplacementDetail() {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [historiqueRows, setHistoriqueRows] = useState<HistoriqueRow[]>([]);
+  const [historiqueLoading, setHistoriqueLoading] = useState(false);
+  const [historiqueError, setHistoriqueError] = useState<string | null>(null);
 
   const fetchData = async () => {
     if (!id) return;
@@ -78,6 +104,9 @@ export default function EmplacementDetail() {
     setChartData([]);
     setRevenusByMachine({});
     setRevenueError(null);
+    setHistoriqueRows([]);
+    setHistoriqueError(null);
+    setHistoriqueLoading(false);
     try {
       const [empRes, machRes] = await Promise.all([
         supabase.from('emplacements').select('id, name, address').eq('id', id).single(),
@@ -91,12 +120,102 @@ export default function EmplacementDetail() {
         machineList = (fallback.data ?? []) as Machine[];
       }
       setMachines(machineList);
+
+      // Historique CRM lié à cette laverie board via crm_laverie_links.
+      setHistoriqueLoading(true);
+      try {
+        const linkRes = await supabase
+          .from('crm_laverie_links')
+          .select('crm_site_id')
+          .eq('emplacement_id', id)
+          .maybeSingle();
+
+        if (linkRes.error) {
+          setHistoriqueError(`Lien CRM introuvable: ${linkRes.error.message}`);
+          setHistoriqueRows([]);
+        } else {
+          let crmSiteId = String(linkRes.data?.crm_site_id ?? '').trim();
+          if (!crmSiteId && empRes.data?.name) {
+            // Auto-récupération: retrouver la laverie CRM par nom si le lien manque.
+            const fallback = await supabase
+              .from('laveries')
+              .select('id')
+              .eq('nom', empRes.data.name)
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .maybeSingle();
+            if (!fallback.error && fallback.data?.id) {
+              crmSiteId = String(fallback.data.id);
+              const { error: upsertErr } = await supabase
+                .from('crm_laverie_links')
+                .upsert({
+                  emplacement_id: id,
+                  crm_site_id: crmSiteId,
+                  sync_status: 'synced',
+                  synced_at: new Date().toISOString(),
+                  last_error: null,
+                });
+              if (upsertErr) {
+                setHistoriqueError(`Lien CRM auto: ${upsertErr.message}`);
+              }
+            }
+          }
+
+          if (!crmSiteId) {
+            setHistoriqueRows([]);
+            setHistoriqueError('Aucun lien CRM pour cette laverie. Lancez le backfill des liens CRM.');
+          } else {
+            const histRes = await supabase
+              .from('historique')
+              .select('id, date_intervention, motif, compte_rendu, pieces_changees, description, created_at')
+              .eq('laverie_id', crmSiteId)
+              .order('date_intervention', { ascending: false });
+
+            if (histRes.error) {
+              setHistoriqueError(`Historique CRM: ${histRes.error.message}`);
+              setHistoriqueRows([]);
+            } else {
+              setHistoriqueRows((histRes.data ?? []) as HistoriqueRow[]);
+              setHistoriqueError(null);
+            }
+          }
+        }
+      } finally {
+        setHistoriqueLoading(false);
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
       setLoading(false);
     }
   };
+
+  const refreshHistorique = useCallback(async () => {
+    if (!id || isResidence && !canAccessEmplacement(id)) return;
+    try {
+      const linkRes = await supabase
+        .from('crm_laverie_links')
+        .select('crm_site_id')
+        .eq('emplacement_id', id)
+        .maybeSingle();
+
+      if (linkRes.error) return;
+      const crmSiteId = String(linkRes.data?.crm_site_id ?? '').trim();
+      if (!crmSiteId) return;
+
+      const histRes = await supabase
+        .from('historique')
+        .select('id, date_intervention, motif, compte_rendu, pieces_changees, description, created_at')
+        .eq('laverie_id', crmSiteId)
+        .order('date_intervention', { ascending: false });
+
+      if (histRes.error) return;
+      setHistoriqueRows((histRes.data ?? []) as HistoriqueRow[]);
+      setHistoriqueError(null);
+    } finally {
+      // no-op
+    }
+  }, [canAccessEmplacement, id, isResidence]);
 
   useEffect(() => {
     fetchData();
@@ -166,6 +285,21 @@ export default function EmplacementDetail() {
       supabase.removeChannel(channel);
     };
   }, [id, loading, machines.length, refreshRevenue]);
+
+  useEffect(() => {
+    if (!id || loading) return;
+    const channel = supabase
+      .channel(`emplacement-${id}-historique`)
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'historique' },
+        () => refreshHistorique()
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [id, loading, refreshHistorique]);
 
   useEffect(() => {
     const onVis = () => {
@@ -405,6 +539,43 @@ export default function EmplacementDetail() {
                 <Line type="monotone" dataKey="montant" stroke="#1C69D3" strokeWidth={2} dot={{ fill: '#1C69D3', r: 4 }} activeDot={{ r: 6 }} />
               </LineChart>
             </ResponsiveContainer>
+          </div>
+        )}
+      </div>
+
+      <div style={{ marginBottom: 32, padding: 24, backgroundColor: '#FFF', borderRadius: 16, border: '1px solid #EEE', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
+        <h3 style={{ fontSize: 17, fontWeight: '600', color: '#000', margin: '0 0 8px' }}>Historique interventions CRM</h3>
+        <p style={{ fontSize: 13, color: '#888', margin: '0 0 20px' }}>
+          Comptes-rendus clôturés depuis le CRM, visibles aussi par les gérants de résidences.
+        </p>
+
+        {historiqueLoading ? (
+          <p style={{ color: '#666', padding: 16 }}>Chargement de l&apos;historique...</p>
+        ) : historiqueError ? (
+          <p style={{ color: '#B91C1C', backgroundColor: '#FEE2E2', borderRadius: 10, padding: 12 }}>{historiqueError}</p>
+        ) : historiqueRows.length === 0 ? (
+          <p style={{ color: '#666', padding: 16 }}>Aucune intervention clôturée pour cette laverie.</p>
+        ) : (
+          <div style={{ display: 'grid', gap: 12 }}>
+            {historiqueRows.map((h) => (
+              <div key={h.id} style={{ border: '1px solid #EEE', borderRadius: 12, padding: 14, backgroundColor: '#FAFAFA' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 8 }}>
+                  <strong style={{ color: '#111' }}>{h.motif || 'Intervention'}</strong>
+                  <span style={{ color: '#666', fontSize: 13 }}>
+                    {formatDateTimeFr(h.date_intervention || h.created_at)}
+                  </span>
+                </div>
+                {h.description ? (
+                  <p style={{ margin: '0 0 8px', color: '#666', fontSize: 14 }}>{h.description}</p>
+                ) : null}
+                <p style={{ margin: 0, color: '#111', fontSize: 14, lineHeight: 1.5 }}>{h.compte_rendu}</p>
+                {h.pieces_changees ? (
+                  <p style={{ margin: '8px 0 0', color: '#374151', fontSize: 13 }}>
+                    <strong>Pieces changees :</strong> {h.pieces_changees}
+                  </p>
+                ) : null}
+              </div>
+            ))}
           </div>
         )}
       </div>
