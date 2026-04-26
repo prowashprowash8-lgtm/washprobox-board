@@ -18,7 +18,18 @@ interface Transaction {
   machine_nom?: string | null;
   emplacement_name?: string | null;
   user_name?: string | null;
+  transaction_finished_at?: string | null;
 }
+
+interface MachineEventRow {
+  transaction_id: string | null;
+  event_type: string;
+  created_at: string;
+}
+
+type DisplayRow =
+  | { kind: 'transaction'; t: Transaction }
+  | { kind: 'stop'; txId: string; machine_id: string | null; user_name?: string | null; machine_nom?: string | null; emplacement_name?: string | null; created_at: string };
 
 function mapRpcRowsToTransactions(txData: Record<string, unknown>[]): Transaction[] {
   return txData.map((t) => ({
@@ -49,7 +60,29 @@ export default function Transactions() {
     if (showLoading) setLoading(true);
     try {
       const txData = await fetchAllTransactionsBoard(supabase);
-      setTransactions(mapRpcRowsToTransactions(txData as Record<string, unknown>[]));
+      const txs = mapRpcRowsToTransactions(txData as Record<string, unknown>[]);
+      const txIds = txs.map((t) => t.id).filter(Boolean);
+      let finishedByTx = new Map<string, string>();
+      if (txIds.length > 0) {
+        const { data: evData } = await supabase
+          .from('machine_event_history')
+          .select('transaction_id,event_type,created_at')
+          .in('transaction_id', txIds)
+          .eq('event_type', 'transaction_finished')
+          .order('created_at', { ascending: false });
+        for (const ev of (evData ?? []) as MachineEventRow[]) {
+          if (!ev.transaction_id) continue;
+          if (!finishedByTx.has(ev.transaction_id)) finishedByTx.set(ev.transaction_id, ev.created_at);
+        }
+      }
+      setTransactions(
+        txs.map((t) => {
+          return {
+            ...t,
+            transaction_finished_at: finishedByTx.get(t.id) ?? null,
+          };
+        })
+      );
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Erreur de chargement');
       setTransactions([]);
@@ -94,6 +127,46 @@ export default function Transactions() {
     return d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
   };
 
+  const eventBadge = (kind: 'start' | 'finish') => {
+    const borderColor = kind === 'start' ? '#16A34A' : '#DC2626';
+    const textColor = kind === 'start' ? '#166534' : '#991B1B';
+    const label = kind === 'start' ? 'Départ' : 'Cycle fini';
+    return (
+      <span
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          padding: '3px 8px',
+          borderRadius: 999,
+          border: `1px solid ${borderColor}`,
+          color: textColor,
+          backgroundColor: '#FFF',
+          fontWeight: 600,
+          fontSize: 11,
+          whiteSpace: 'nowrap',
+        }}
+      >
+        {label}
+      </span>
+    );
+  };
+
+  const displayRows: DisplayRow[] = [];
+  for (const t of transactions) {
+    if (t.transaction_finished_at) {
+      displayRows.push({
+        kind: 'stop',
+        txId: t.id,
+        machine_id: t.machine_id,
+        user_name: t.user_name,
+        machine_nom: t.machine_nom,
+        emplacement_name: t.emplacement_name,
+        created_at: t.transaction_finished_at,
+      });
+    }
+    displayRows.push({ kind: 'transaction', t });
+  }
+
   return (
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 20, marginBottom: 28 }}>
@@ -101,8 +174,8 @@ export default function Transactions() {
           <h1 style={{ fontSize: 28, fontWeight: '700', color: '#000', margin: 0 }}>Transactions</h1>
           <p style={{ color: '#666', margin: '8px 0 0' }}>
             Tous les paiements effectués par les clients.
-            {!loading && transactions.length > 0 ? (
-              <span style={{ marginLeft: 8, color: '#999' }}>({transactions.length} ligne{transactions.length > 1 ? 's' : ''})</span>
+            {!loading && displayRows.length > 0 ? (
+              <span style={{ marginLeft: 8, color: '#999' }}>({displayRows.length} ligne{displayRows.length > 1 ? 's' : ''})</span>
             ) : null}
           </p>
         </div>
@@ -122,7 +195,7 @@ export default function Transactions() {
       <div style={{ backgroundColor: '#FFF', borderRadius: 16, border: '1px solid #EEE', overflow: 'hidden' }}>
         {loading ? (
           <div style={{ padding: 48, textAlign: 'center', color: '#666' }}>Chargement...</div>
-        ) : transactions.length === 0 ? (
+        ) : displayRows.length === 0 ? (
           <div style={{ padding: 64, textAlign: 'center', color: '#666' }}>
             <Receipt size={48} color="#CCC" style={{ marginBottom: 16 }} />
             <p style={{ margin: 0, fontSize: 16 }}>Aucune transaction pour le moment.</p>
@@ -136,44 +209,68 @@ export default function Transactions() {
                 <th style={{ padding: '14px 20px', textAlign: 'left', fontSize: 12, fontWeight: '600', color: '#666' }}>Machine</th>
                 <th style={{ padding: '14px 20px', textAlign: 'left', fontSize: 12, fontWeight: '600', color: '#666' }}>Laverie</th>
                 <th style={{ padding: '14px 20px', textAlign: 'left', fontSize: 12, fontWeight: '600', color: '#666' }}>Source</th>
+                <th style={{ padding: '14px 20px', textAlign: 'left', fontSize: 12, fontWeight: '600', color: '#666' }}>Événement</th>
                 <th style={{ padding: '14px 20px', textAlign: 'right', fontSize: 12, fontWeight: '600', color: '#666' }}>Montant</th>
                 <th style={{ width: 40 }} />
               </tr>
             </thead>
             <tbody>
-              {transactions.map((t) => (
-                <tr
-                  key={t.id}
-                  style={{ borderBottom: '1px solid #F0F0F0', cursor: t.machine_id ? 'pointer' : 'default' }}
-                  onClick={() => t.machine_id && navigate(`/machines/${t.machine_id}`)}
-                >
-                  <td style={{ padding: '16px 20px', fontSize: 14, color: '#444' }}>{formatDate(t.created_at)}</td>
-                  <td style={{ padding: '16px 20px', fontSize: 14, color: '#666' }}>{t.user_name || '—'}</td>
-                  <td style={{ padding: '16px 20px', fontSize: 14, color: '#000', fontWeight: '500' }}>{t.machine_nom || '—'}</td>
-                  <td style={{ padding: '16px 20px', fontSize: 14, color: '#666' }}>{t.emplacement_name || '—'}</td>
-                  <td style={{ padding: '16px 20px', fontSize: 14, color: '#666' }}>
-                    {t.payment_method === 'test' ? (
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: '#6B7280', fontStyle: 'italic' }}>
-                        Lavage test
-                      </span>
-                    ) : t.payment_method === 'promo' ? (
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                        <TicketPercent size={16} color="#059669" /> Code promo {t.promo_code && <code style={{ fontSize: 12, backgroundColor: '#E5E7EB', padding: '2px 6px', borderRadius: 4 }}>{t.promo_code}</code>}
-                      </span>
-                    ) : t.payment_method === 'wallet' ? (
-                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                        <Wallet size={16} color="#1C69D3" /> Portefeuille
-                      </span>
-                    ) : (
-                      'Carte'
-                    )}
-                  </td>
-                  <td style={{ padding: '16px 20px', fontSize: 14, fontWeight: '600', color: t.status === 'refunded' ? '#B91C1C' : t.payment_method === 'test' ? '#6B7280' : '#000', textAlign: 'right' }}>
-                    {t.status === 'refunded' ? '(Remboursé) ' : ''}{t.payment_method === 'test' ? '—' : t.payment_method === 'promo' ? 'Gratuit' : `${(Number(t.amount ?? t.montant) ?? 0).toFixed(2)} €`}
-                  </td>
-                  <td style={{ padding: '16px 8px' }}>{t.machine_id && <ChevronRight size={18} color="#999" />}</td>
-                </tr>
-              ))}
+              {displayRows.map((row) => {
+                if (row.kind === 'transaction') {
+                  const t = row.t;
+                  return (
+                    <tr
+                      key={`tx-${t.id}`}
+                      style={{ borderBottom: '1px solid #F0F0F0', cursor: t.machine_id ? 'pointer' : 'default' }}
+                      onClick={() => t.machine_id && navigate(`/machines/${t.machine_id}`)}
+                    >
+                      <td style={{ padding: '16px 20px', fontSize: 14, color: '#444' }}>{formatDate(t.created_at)}</td>
+                      <td style={{ padding: '16px 20px', fontSize: 14, color: '#666' }}>{t.user_name || '—'}</td>
+                      <td style={{ padding: '16px 20px', fontSize: 14, color: '#000', fontWeight: '500' }}>{t.machine_nom || '—'}</td>
+                      <td style={{ padding: '16px 20px', fontSize: 14, color: '#666' }}>{t.emplacement_name || '—'}</td>
+                      <td style={{ padding: '16px 20px', fontSize: 14, color: '#666' }}>
+                        {t.payment_method === 'test' ? (
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: '#6B7280', fontStyle: 'italic' }}>
+                            Lavage test
+                          </span>
+                        ) : t.payment_method === 'promo' ? (
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                            <TicketPercent size={16} color="#059669" /> Code promo {t.promo_code && <code style={{ fontSize: 12, backgroundColor: '#E5E7EB', padding: '2px 6px', borderRadius: 4 }}>{t.promo_code}</code>}
+                          </span>
+                        ) : t.payment_method === 'wallet' ? (
+                          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                            <Wallet size={16} color="#1C69D3" /> Portefeuille
+                          </span>
+                        ) : (
+                          'Carte'
+                        )}
+                      </td>
+                      <td style={{ padding: '16px 20px', fontSize: 12, color: '#555' }}>{eventBadge('start')}</td>
+                      <td style={{ padding: '16px 20px', fontSize: 14, fontWeight: '600', color: t.status === 'refunded' ? '#B91C1C' : t.payment_method === 'test' ? '#6B7280' : '#000', textAlign: 'right' }}>
+                        {t.status === 'refunded' ? '(Remboursé) ' : ''}{t.payment_method === 'test' ? '—' : t.payment_method === 'promo' ? 'Gratuit' : `${(Number(t.amount ?? t.montant) ?? 0).toFixed(2)} €`}
+                      </td>
+                      <td style={{ padding: '16px 8px' }}>{t.machine_id && <ChevronRight size={18} color="#999" />}</td>
+                    </tr>
+                  );
+                }
+                return (
+                  <tr
+                    key={`stop-${row.txId}`}
+                    style={{ borderBottom: '1px solid #F0F0F0', backgroundColor: '#FFF' }}
+                  >
+                    <td style={{ padding: '16px 20px', fontSize: 14, color: '#444' }}>{formatDate(row.created_at)}</td>
+                    <td style={{ padding: '16px 20px', fontSize: 14, color: '#666' }}>{row.user_name || '—'}</td>
+                    <td style={{ padding: '16px 20px', fontSize: 14, color: '#000', fontWeight: '500' }}>{row.machine_nom || '—'}</td>
+                    <td style={{ padding: '16px 20px', fontSize: 14, color: '#666' }}>{row.emplacement_name || '—'}</td>
+                    <td style={{ padding: '16px 20px', fontSize: 14, color: '#666' }}>
+                      <span style={{ color: '#9CA3AF' }}>Système</span>
+                    </td>
+                    <td style={{ padding: '16px 20px', fontSize: 12, color: '#555' }}>{eventBadge('finish')}</td>
+                    <td style={{ padding: '16px 20px', fontSize: 14, fontWeight: '600', color: '#9CA3AF', textAlign: 'right' }}>—</td>
+                    <td style={{ padding: '16px 8px' }}>{row.machine_id && <ChevronRight size={18} color="#999" />}</td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         )}

@@ -28,6 +28,7 @@ interface TransactionWithDetails {
   machine_nom?: string | null;
   machine_name?: string | null;
   emplacement_name?: string | null;
+  transaction_finished_at?: string | null;
 }
 
 interface WalletStatsRow {
@@ -46,14 +47,34 @@ interface WalletActivityLine {
 
 type ActivityRow =
   | { kind: 'machine'; created_at: string; t: TransactionWithDetails }
+  | { kind: 'machine_stop'; created_at: string; t: TransactionWithDetails }
   | { kind: 'wallet'; created_at: string; w: WalletActivityLine };
 
 function buildActivityRows(transactions: TransactionWithDetails[], wallet: WalletActivityLine[]): ActivityRow[] {
-  const rows: ActivityRow[] = [
-    ...transactions.map((t) => ({ kind: 'machine' as const, created_at: t.created_at, t })),
-    ...wallet.map((w) => ({ kind: 'wallet' as const, created_at: w.created_at, w })),
-  ];
-  rows.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+  const rows: ActivityRow[] = [];
+  for (const t of transactions) {
+    rows.push({ kind: 'machine', created_at: t.created_at, t });
+    if (t.transaction_finished_at) {
+      rows.push({ kind: 'machine_stop', created_at: t.transaction_finished_at, t });
+    }
+  }
+  rows.push(...wallet.map((w) => ({ kind: 'wallet' as const, created_at: w.created_at, w })));
+  rows.sort((a, b) => {
+    const getAnchorDate = (row: ActivityRow) => {
+      if (row.kind === 'machine_stop') return row.t.created_at;
+      return row.created_at;
+    };
+
+    const dateDiff = new Date(getAnchorDate(b)).getTime() - new Date(getAnchorDate(a)).getTime();
+    if (dateDiff !== 0) return dateDiff;
+
+    // Pour une même transaction: afficher "Cycle fini" avant "Départ".
+    if (a.kind === 'machine' && b.kind === 'machine_stop' && a.t.id === b.t.id) return 1;
+    if (a.kind === 'machine_stop' && b.kind === 'machine' && a.t.id === b.t.id) return -1;
+
+    // Garder les lignes wallet stables entre elles.
+    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+  });
   return rows;
 }
 
@@ -95,6 +116,30 @@ export default function ProfileDetail() {
     return new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
   };
 
+  const eventBadge = (kind: 'start' | 'finish') => {
+    const borderColor = kind === 'start' ? '#16A34A' : '#DC2626';
+    const textColor = kind === 'start' ? '#166534' : '#991B1B';
+    const label = kind === 'start' ? 'Départ' : 'Cycle fini';
+    return (
+      <span
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          padding: '3px 8px',
+          borderRadius: 999,
+          border: `1px solid ${borderColor}`,
+          color: textColor,
+          backgroundColor: '#FFF',
+          fontWeight: 600,
+          fontSize: 11,
+          whiteSpace: 'nowrap',
+        }}
+      >
+        {label}
+      </span>
+    );
+  };
+
   const fetchData = async () => {
     if (!id) return;
     setLoading(true);
@@ -109,9 +154,28 @@ export default function ProfileDetail() {
       if (txErr) throw txErr;
 
       const txs = (txData ?? []) as TransactionWithDetails[];
-      setTransactions(txs.map((t) => ({
+      const mappedTxs = txs.map((t) => ({
         ...t,
         machine_nom: (t as { machine_name?: string }).machine_name ?? t.machine_nom,
+      }));
+      const txIds = mappedTxs.map((t) => t.id).filter(Boolean);
+      const finishedByTx = new Map<string, string>();
+      if (txIds.length > 0) {
+        const { data: evData } = await supabase
+          .from('machine_event_history')
+          .select('transaction_id,event_type,created_at')
+          .in('transaction_id', txIds)
+          .eq('event_type', 'transaction_finished')
+          .order('created_at', { ascending: false });
+        for (const ev of evData ?? []) {
+          const txId = (ev as { transaction_id?: string | null }).transaction_id;
+          if (!txId) continue;
+          if (!finishedByTx.has(txId)) finishedByTx.set(txId, String((ev as { created_at?: string }).created_at ?? ''));
+        }
+      }
+      setTransactions(mappedTxs.map((t) => ({
+        ...t,
+        transaction_finished_at: finishedByTx.get(t.id) ?? null,
       })));
 
       const [{ data: walletData, error: walletErr }, { data: walActData, error: walActErr }] = await Promise.all([
@@ -253,6 +317,7 @@ export default function ProfileDetail() {
                 <th style={{ padding: '12px 20px', textAlign: 'left', fontSize: 12, fontWeight: '600', color: '#666' }}>Laverie</th>
                 <th style={{ padding: '12px 20px', textAlign: 'left', fontSize: 12, fontWeight: '600', color: '#666' }}>Machine</th>
                 <th style={{ padding: '12px 20px', textAlign: 'left', fontSize: 12, fontWeight: '600', color: '#666' }}>Source</th>
+                <th style={{ padding: '12px 20px', textAlign: 'left', fontSize: 12, fontWeight: '600', color: '#666' }}>Événement</th>
                 <th style={{ padding: '12px 20px', textAlign: 'right', fontSize: 12, fontWeight: '600', color: '#666' }}>Montant</th>
               </tr>
             </thead>
@@ -286,6 +351,9 @@ export default function ProfileDetail() {
                             'Carte'
                           )}
                         </td>
+                        <td style={{ padding: '14px 20px', fontSize: 12, color: '#555' }}>
+                          {eventBadge('start')}
+                        </td>
                         <td
                           style={{
                             padding: '14px 20px',
@@ -298,6 +366,29 @@ export default function ProfileDetail() {
                           {isRefunded(t) ? '(Remboursé) ' : ''}
                           {t.payment_method === 'test' ? '—' : t.payment_method === 'promo' ? 'Gratuit' : `${getAmount(t).toFixed(2)} €`}
                         </td>
+                      </tr>
+                    );
+                  })()
+                ) : row.kind === 'machine_stop' ? (
+                  (() => {
+                    const t = row.t;
+                    return (
+                      <tr key={`ms-${t.id}-${row.created_at}`} style={{ borderBottom: '1px solid #F0F0F0' }}>
+                        <td style={{ padding: '14px 20px', fontSize: 14, color: '#444' }}>{formatDate(row.created_at)}</td>
+                        <td style={{ padding: '14px 20px', fontSize: 14, color: '#666' }}>
+                          {t.emplacement_name ? (
+                            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4 }}>
+                              <MapPin size={14} />
+                              {t.emplacement_name}
+                            </span>
+                          ) : (
+                            '—'
+                          )}
+                        </td>
+                        <td style={{ padding: '14px 20px', fontSize: 14, color: '#000', fontWeight: '500' }}>{t.machine_nom || '—'}</td>
+                        <td style={{ padding: '14px 20px', fontSize: 14, color: '#9CA3AF' }}>Système</td>
+                        <td style={{ padding: '14px 20px', fontSize: 12, color: '#555' }}>{eventBadge('finish')}</td>
+                        <td style={{ padding: '14px 20px', fontSize: 14, fontWeight: '600', color: '#9CA3AF', textAlign: 'right' }}>—</td>
                       </tr>
                     );
                   })()
