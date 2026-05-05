@@ -11,7 +11,11 @@ type CrmUser = {
   is_active: boolean;
 };
 
-export default function CrmUtilisateurs() {
+type CrmUtilisateursProps = {
+  embedded?: boolean;
+};
+
+export default function CrmUtilisateurs({ embedded = false }: CrmUtilisateursProps) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [rows, setRows] = useState<CrmUser[]>([]);
@@ -58,10 +62,14 @@ export default function CrmUtilisateurs() {
   };
 
   return (
-    <div className={styles.container}>
-      <div className={styles.wrapper}>
-      <h1 className={styles.title}>Comptes CRM</h1>
-      <p className={styles.subtitle}>Crée et gère les comptes salariés/patrons du CRM.</p>
+    <div className={embedded ? styles.embeddedRoot : styles.container}>
+      <div className={embedded ? styles.embeddedWrapper : styles.wrapper}>
+      {!embedded && (
+        <>
+          <h1 className={styles.title}>Comptes CRM</h1>
+          <p className={styles.subtitle}>Crée et gère les comptes salariés/patrons du CRM.</p>
+        </>
+      )}
       {notice && <div className={styles.notice}>{notice}</div>}
       <form onSubmit={createUser} className={styles.form}>
         <input

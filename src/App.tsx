@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Routes, Route, NavLink, Navigate, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Receipt, MapPin, Tablet, Settings, Users, Megaphone, Target, LogOut, RotateCcw, KeyRound } from 'lucide-react';
+import { LayoutDashboard, Receipt, MapPin, Tablet, Settings, Users, Megaphone, Target, LogOut, RotateCcw } from 'lucide-react';
 import Accueil from './pages/Accueil';
 import Appareils from './pages/Appareils';
 import Emplacements from './pages/Emplacements';
@@ -13,7 +13,6 @@ import Remboursements from './pages/Remboursements';
 import Utilisateurs from './pages/Utilisateurs';
 import ProfileDetail from './pages/ProfileDetail';
 import Login from './pages/Login';
-import GerantsResidences from './pages/GerantsResidences';
 import CrmAccueil from './pages/crm/CrmAccueil';
 import CrmLaveries from './pages/crm/CrmLaveries';
 import CrmLaverieDetail from './pages/crm/CrmLaverieDetail';
@@ -22,7 +21,7 @@ import CrmInterventionCreate from './pages/crm/CrmInterventionCreate';
 import CrmTournee from './pages/crm/CrmTournee';
 import CrmCommande from './pages/crm/CrmCommande';
 import CrmProspection from './pages/crm/CrmProspection';
-import CrmUtilisateurs from './pages/crm/CrmUtilisateurs';
+import CrmAccesUtilisateurs from './pages/crm/CrmAccesUtilisateurs';
 import { useAuth } from './contexts/AuthContext';
 import { useBoardAccess } from './contexts/BoardAccessContext';
 import { supabase } from './supabaseClient';
@@ -137,7 +136,6 @@ function App() {
               <MenuLink icon={<RotateCcw size={20}/>} label="Remboursements" to="/remboursements" badge={pendingRefundCount} />
               <hr style={{ width: '100%', border: '0.5px solid #F0F0F0', margin: '10px 0' }} />
               <MenuLink icon={<Users size={20}/>} label="Utilisateurs" to="/utilisateurs" />
-              <MenuLink icon={<KeyRound size={20}/>} label="Gérants de résidences" to="/gerants-residences" />
               <MenuLink icon={<Settings size={20}/>} label="Configuration" to="/configuration" />
               <hr style={{ width: '100%', border: '0.5px solid #F0F0F0', margin: '10px 0' }} />
               <MenuLink icon={<LayoutDashboard size={20}/>} label="Accueil CRM" to="/crm/accueil" />
@@ -146,7 +144,7 @@ function App() {
               <MenuLink icon={<Receipt size={20}/>} label="Planning tournée" to="/crm/planning-tournee" />
               <MenuLink icon={<Tablet size={20}/>} label="Commande" to="/crm/commande" />
               <MenuLink icon={<Megaphone size={20}/>} label="Prospection" to="/crm/prospection" />
-              <MenuLink icon={<Users size={20}/>} label="Utilisateurs CRM" to="/crm/utilisateurs" />
+              <MenuLink icon={<Users size={20}/>} label="Utilisateurs & accès" to="/crm/utilisateurs" />
             </>
           )}
         </nav>
@@ -197,7 +195,7 @@ function App() {
               <Route path="/remboursements" element={<Remboursements />} />
               <Route path="/utilisateurs" element={<Utilisateurs />} />
               <Route path="/utilisateurs/:id" element={<ProfileDetail />} />
-              <Route path="/gerants-residences" element={<GerantsResidences />} />
+              <Route path="/gerants-residences" element={<Navigate to="/crm/utilisateurs?tab=gerants" replace />} />
               <Route path="/configuration" element={<ConfigurationPlaceholder />} />
               <Route path="/crm/accueil" element={<CrmAccueil />} />
               <Route path="/crm/laveries" element={<CrmLaveries />} />
@@ -208,7 +206,7 @@ function App() {
               <Route path="/crm/planning-tournee" element={<CrmTournee />} />
               <Route path="/crm/commande" element={<CrmCommande />} />
               <Route path="/crm/prospection" element={<CrmProspection />} />
-              <Route path="/crm/utilisateurs" element={<CrmUtilisateurs />} />
+              <Route path="/crm/utilisateurs" element={<CrmAccesUtilisateurs />} />
             </>
           ) : null}
           <Route path="*" element={<Navigate to={isResidence ? '/emplacements' : '/'} replace />} />

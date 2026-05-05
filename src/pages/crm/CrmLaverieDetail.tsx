@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { supabase } from '../../supabaseClient';
+import { resolveCrmSiteIdForEmplacement } from '../../lib/resolveCrmSiteForEmplacement';
 
 type Laverie = {
   id: string;
@@ -24,6 +25,7 @@ type Historique = {
   motif: string;
   description: string;
   compte_rendu: string;
+  pieces_changees: string | null;
 };
 
 export default function CrmLaverieDetail() {
@@ -38,6 +40,7 @@ export default function CrmLaverieDetail() {
   const [savingNotes, setSavingNotes] = useState(false);
   const [laverie, setLaverie] = useState<Laverie | null>(null);
   const [historique, setHistorique] = useState<Historique[]>([]);
+  const [linkedEmplacementId, setLinkedEmplacementId] = useState<string | null>(null);
 
   const ensureLaverieFromBoard = async (boardEmplacementId: string) => {
     const empRes = await supabase.from('emplacements').select('id, name, address').eq('id', boardEmplacementId).single();
@@ -86,61 +89,74 @@ export default function CrmLaverieDetail() {
 
   useEffect(() => {
     const load = async () => {
+      setNotice(null);
+      setLinkedEmplacementId(emplacementId ?? null);
+
       let targetId = id ?? null;
+
       if (!targetId && emplacementId) {
         const empRes = await supabase.from('emplacements').select('id, name, address, created_at').eq('id', emplacementId).single();
-        if (!empRes.error && empRes.data) {
-          const name = (empRes.data.name ?? '').trim();
-          const address = (empRes.data.address ?? 'Adresse non renseignée').trim();
-
-          const existing = await supabase
-            .from('laveries')
-            .select('*')
-            .eq('nom', name)
-            .eq('adresse', address)
-            .maybeSingle();
-
-          if (!existing.error && existing.data) {
-            targetId = existing.data.id as string;
-          } else {
-            targetId = await ensureLaverieFromBoard(emplacementId);
-            if (!targetId) {
-              // Fallback: on affiche quand meme une fiche basee sur le board.
-              setLaverie({
-                id: `board-${empRes.data.id}`,
-                nom: name || 'Sans nom',
-                adresse: address,
-                ville: 'Non renseignée',
-                code_postal: '00000',
-                infos_supplementaires: null,
-                telephone: null,
-                email: null,
-                latitude: null,
-                longitude: null,
-                photo_principale: null,
-                created_at: empRes.data.created_at ?? new Date().toISOString(),
-              });
-              setNotesValue('');
-              setHistorique([]);
-              setStorageFolderId(empRes.data.id);
-              await loadPhotos(empRes.data.id);
-              setLoading(false);
-              return;
-            }
-          }
-        } else {
+        if (empRes.error || !empRes.data) {
           setLoading(false);
           return;
         }
+        const name = (empRes.data.name ?? '').trim();
+        const address = (empRes.data.address ?? 'Adresse non renseignée').trim();
+
+        const { crmSiteId, linkUpsertError } = await resolveCrmSiteIdForEmplacement(supabase, emplacementId, name, address);
+        if (linkUpsertError) {
+          setNotice(linkUpsertError);
+        }
+
+        if (crmSiteId) {
+          targetId = crmSiteId;
+        } else {
+          targetId = await ensureLaverieFromBoard(emplacementId);
+          if (!targetId) {
+            setLaverie({
+              id: `board-${empRes.data.id}`,
+              nom: name || 'Sans nom',
+              adresse: address,
+              ville: 'Non renseignée',
+              code_postal: '00000',
+              infos_supplementaires: null,
+              telephone: null,
+              email: null,
+              latitude: null,
+              longitude: null,
+              photo_principale: null,
+              created_at: empRes.data.created_at ?? new Date().toISOString(),
+            });
+            setNotesValue('');
+            setHistorique([]);
+            setStorageFolderId(empRes.data.id);
+            await loadPhotos(empRes.data.id);
+            setLoading(false);
+            return;
+          }
+        }
       }
+
       if (!targetId) {
         setLoading(false);
         return;
       }
+
+      if (!emplacementId) {
+        const rev = await supabase.from('crm_laverie_links').select('emplacement_id').eq('crm_site_id', targetId).maybeSingle();
+        if (!rev.error && rev.data?.emplacement_id) {
+          setLinkedEmplacementId(String(rev.data.emplacement_id));
+        }
+      }
+
       setLoading(true);
       const [lavRes, histRes] = await Promise.all([
         supabase.from('laveries').select('*').eq('id', targetId).single(),
-        supabase.from('historique').select('id, technicien_nom, date_intervention, motif, description, compte_rendu').eq('laverie_id', targetId).order('date_intervention', { ascending: false }),
+        supabase
+          .from('historique')
+          .select('id, technicien_nom, date_intervention, motif, description, compte_rendu, pieces_changees')
+          .eq('laverie_id', targetId)
+          .order('date_intervention', { ascending: false }),
       ]);
       if (!lavRes.error) {
         setLaverie(lavRes.data as Laverie);
@@ -214,6 +230,25 @@ export default function CrmLaverieDetail() {
         <p style={{ margin: '8px 0 0', color: '#666' }}>
           {laverie.ville} - Ajoutee le {new Date(laverie.created_at).toLocaleDateString('fr-FR')}
         </p>
+        {linkedEmplacementId ? (
+          <p style={{ margin: '12px 0 0' }}>
+            <button
+              type="button"
+              onClick={() => navigate(`/emplacements/${linkedEmplacementId}`)}
+              style={{
+                border: '1px solid #1c69d3',
+                background: '#fff',
+                color: '#1c69d3',
+                borderRadius: 8,
+                padding: '8px 14px',
+                fontWeight: 600,
+                cursor: 'pointer',
+              }}
+            >
+              Voir la fiche board (machines, CA, même historique)
+            </button>
+          </p>
+        ) : null}
       </div>
       <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 16 }}>
         <div style={{ background: '#fff', border: '1px solid #eee', borderRadius: 14, padding: 16 }}>
@@ -230,6 +265,11 @@ export default function CrmLaverieDetail() {
                   </p>
                   <p style={{ margin: '0 0 6px' }}>{item.description}</p>
                   <p style={{ margin: 0, color: '#444' }}>{item.compte_rendu}</p>
+                  {item.pieces_changees ? (
+                    <p style={{ margin: '8px 0 0', color: '#555', fontSize: 14 }}>
+                      <strong>Pièces changées :</strong> {item.pieces_changees}
+                    </p>
+                  ) : null}
                 </div>
               ))}
             </div>

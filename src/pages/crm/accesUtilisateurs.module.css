@@ -1,0 +1,55 @@
+.wrap {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.pageTitle {
+  margin: 0 0 8px;
+  font-size: 28px;
+  font-weight: 700;
+  color: #111;
+}
+
+.pageSubtitle {
+  margin: 0 0 20px;
+  color: #666;
+  font-size: 15px;
+  line-height: 1.5;
+}
+
+.tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+  border-bottom: 1px solid #e5e7eb;
+  padding-bottom: 0;
+}
+
+.tab {
+  padding: 12px 18px;
+  border: none;
+  background: transparent;
+  color: #64748b;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: 10px 10px 0 0;
+  margin-bottom: -1px;
+  border-bottom: 3px solid transparent;
+}
+
+.tab:hover {
+  color: #1c69d3;
+  background: #f8fafc;
+}
+
+.tabActive {
+  color: #1c69d3;
+  background: #fff;
+  border-bottom-color: #1c69d3;
+}
+
+.panel {
+  min-height: 200px;
+}

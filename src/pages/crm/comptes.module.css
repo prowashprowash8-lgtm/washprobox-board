@@ -1,5 +1,7 @@
 .container { min-height: 100vh; background: #f8f9fa; }
+.embeddedRoot { min-height: 0; background: transparent; }
 .wrapper { max-width: 1200px; margin: 0 auto; padding: 28px 20px 40px; }
+.embeddedWrapper { max-width: none; margin: 0; padding: 0; }
 .title { margin: 0; font-size: 28px; }
 .subtitle { color: #666; margin-top: 8px; }
 .notice { margin: 12px 0; padding: 10px 12px; border-radius: 8px; background: #fff4d6; color: #7a5a00; }

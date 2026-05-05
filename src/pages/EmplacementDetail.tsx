@@ -16,6 +16,7 @@ import {
 } from '../utils/revenueStats';
 import { fetchTransactionsForRevenue } from '../utils/fetchTransactionsForRevenue';
 import { useBoardAccess } from '../contexts/BoardAccessContext';
+import { resolveCrmSiteIdForEmplacement } from '../lib/resolveCrmSiteForEmplacement';
 
 interface Machine {
   id: string;
@@ -38,6 +39,7 @@ interface HistoriqueRow {
   compte_rendu: string;
   pieces_changees: string | null;
   description: string | null;
+  technicien_nom?: string | null;
   created_at?: string | null;
 }
 
@@ -87,6 +89,7 @@ export default function EmplacementDetail() {
   const [historiqueRows, setHistoriqueRows] = useState<HistoriqueRow[]>([]);
   const [historiqueLoading, setHistoriqueLoading] = useState(false);
   const [historiqueError, setHistoriqueError] = useState<string | null>(null);
+  const [crmLaverieIdForLink, setCrmLaverieIdForLink] = useState<string | null>(null);
 
   const fetchData = async () => {
     if (!id) return;
@@ -107,6 +110,7 @@ export default function EmplacementDetail() {
     setHistoriqueRows([]);
     setHistoriqueError(null);
     setHistoriqueLoading(false);
+    setCrmLaverieIdForLink(null);
     try {
       const [empRes, machRes] = await Promise.all([
         supabase.from('emplacements').select('id, name, address').eq('id', id).single(),
@@ -121,63 +125,37 @@ export default function EmplacementDetail() {
       }
       setMachines(machineList);
 
-      // Historique CRM lié à cette laverie board via crm_laverie_links.
       setHistoriqueLoading(true);
       try {
-        const linkRes = await supabase
-          .from('crm_laverie_links')
-          .select('crm_site_id')
-          .eq('emplacement_id', id)
-          .maybeSingle();
+        const { crmSiteId, linkUpsertError } = await resolveCrmSiteIdForEmplacement(
+          supabase,
+          id,
+          empRes.data?.name,
+          empRes.data?.address
+        );
 
-        if (linkRes.error) {
-          setHistoriqueError(`Lien CRM introuvable: ${linkRes.error.message}`);
+        if (linkUpsertError) {
+          setHistoriqueError(`Lien CRM: ${linkUpsertError}`);
           setHistoriqueRows([]);
+        } else if (!crmSiteId) {
+          setHistoriqueRows([]);
+          setHistoriqueError(
+            'Aucune laverie CRM liée à cet emplacement. Lancez le backfill board → CRM ou créez la fiche depuis le CRM.'
+          );
         } else {
-          let crmSiteId = String(linkRes.data?.crm_site_id ?? '').trim();
-          if (!crmSiteId && empRes.data?.name) {
-            // Auto-récupération: retrouver la laverie CRM par nom si le lien manque.
-            const fallback = await supabase
-              .from('laveries')
-              .select('id')
-              .eq('nom', empRes.data.name)
-              .order('created_at', { ascending: false })
-              .limit(1)
-              .maybeSingle();
-            if (!fallback.error && fallback.data?.id) {
-              crmSiteId = String(fallback.data.id);
-              const { error: upsertErr } = await supabase
-                .from('crm_laverie_links')
-                .upsert({
-                  emplacement_id: id,
-                  crm_site_id: crmSiteId,
-                  sync_status: 'synced',
-                  synced_at: new Date().toISOString(),
-                  last_error: null,
-                });
-              if (upsertErr) {
-                setHistoriqueError(`Lien CRM auto: ${upsertErr.message}`);
-              }
-            }
-          }
+          setCrmLaverieIdForLink(crmSiteId);
+          const histRes = await supabase
+            .from('historique')
+            .select('id, date_intervention, motif, compte_rendu, pieces_changees, description, technicien_nom, created_at')
+            .eq('laverie_id', crmSiteId)
+            .order('date_intervention', { ascending: false });
 
-          if (!crmSiteId) {
+          if (histRes.error) {
+            setHistoriqueError(`Historique CRM: ${histRes.error.message}`);
             setHistoriqueRows([]);
-            setHistoriqueError('Aucun lien CRM pour cette laverie. Lancez le backfill des liens CRM.');
           } else {
-            const histRes = await supabase
-              .from('historique')
-              .select('id, date_intervention, motif, compte_rendu, pieces_changees, description, created_at')
-              .eq('laverie_id', crmSiteId)
-              .order('date_intervention', { ascending: false });
-
-            if (histRes.error) {
-              setHistoriqueError(`Historique CRM: ${histRes.error.message}`);
-              setHistoriqueRows([]);
-            } else {
-              setHistoriqueRows((histRes.data ?? []) as HistoriqueRow[]);
-              setHistoriqueError(null);
-            }
+            setHistoriqueRows((histRes.data ?? []) as HistoriqueRow[]);
+            setHistoriqueError(null);
           }
         }
       } finally {
@@ -191,21 +169,24 @@ export default function EmplacementDetail() {
   };
 
   const refreshHistorique = useCallback(async () => {
-    if (!id || isResidence && !canAccessEmplacement(id)) return;
+    if (!id || (isResidence && !canAccessEmplacement(id))) return;
     try {
-      const linkRes = await supabase
-        .from('crm_laverie_links')
-        .select('crm_site_id')
-        .eq('emplacement_id', id)
-        .maybeSingle();
-
-      if (linkRes.error) return;
-      const crmSiteId = String(linkRes.data?.crm_site_id ?? '').trim();
+      const { crmSiteId, linkUpsertError } = await resolveCrmSiteIdForEmplacement(
+        supabase,
+        id,
+        emplacement?.name,
+        emplacement?.address
+      );
+      if (linkUpsertError) {
+        setHistoriqueError(`Lien CRM: ${linkUpsertError}`);
+        return;
+      }
       if (!crmSiteId) return;
 
+      setCrmLaverieIdForLink(crmSiteId);
       const histRes = await supabase
         .from('historique')
-        .select('id, date_intervention, motif, compte_rendu, pieces_changees, description, created_at')
+        .select('id, date_intervention, motif, compte_rendu, pieces_changees, description, technicien_nom, created_at')
         .eq('laverie_id', crmSiteId)
         .order('date_intervention', { ascending: false });
 
@@ -215,7 +196,7 @@ export default function EmplacementDetail() {
     } finally {
       // no-op
     }
-  }, [canAccessEmplacement, id, isResidence]);
+  }, [canAccessEmplacement, emplacement?.address, emplacement?.name, id, isResidence]);
 
   useEffect(() => {
     fetchData();
@@ -425,6 +406,26 @@ export default function EmplacementDetail() {
         <div>
           <h1 style={{ fontSize: 28, fontWeight: '700', color: '#000', margin: '0 0 8px' }}>{emplacement.name}</h1>
           {emplacement.address && <p style={{ margin: 0, fontSize: 14, color: '#666' }}>{emplacement.address}</p>}
+          {crmLaverieIdForLink && !isResidence ? (
+            <p style={{ margin: '12px 0 0' }}>
+              <button
+                type="button"
+                onClick={() => navigate(`/crm/laveries/${crmLaverieIdForLink}`)}
+                style={{
+                  border: '1px solid #1c69d3',
+                  background: '#fff',
+                  color: '#1c69d3',
+                  borderRadius: 10,
+                  padding: '10px 16px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  fontSize: 14,
+                }}
+              >
+                Fiche CRM (notes, photos — même historique)
+              </button>
+            </p>
+          ) : null}
         </div>
         {!isResidence && (
           <div style={{ display: 'flex', gap: 10 }}>
@@ -563,6 +564,7 @@ export default function EmplacementDetail() {
                   <strong style={{ color: '#111' }}>{h.motif || 'Intervention'}</strong>
                   <span style={{ color: '#666', fontSize: 13 }}>
                     {formatDateTimeFr(h.date_intervention || h.created_at)}
+                    {h.technicien_nom ? ` · ${h.technicien_nom}` : ''}
                   </span>
                 </div>
                 {h.description ? (

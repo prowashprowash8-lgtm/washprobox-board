@@ -93,7 +93,11 @@ async function resolveFunctionErrorMessage(err: unknown, fallback: string): Prom
   return fallback;
 }
 
-export default function GerantsResidences() {
+type GerantsResidencesProps = {
+  embedded?: boolean;
+};
+
+export default function GerantsResidences({ embedded = false }: GerantsResidencesProps) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -293,13 +297,24 @@ export default function GerantsResidences() {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 16, flexWrap: 'wrap', marginBottom: 24 }}>
-        <div>
-          <h1 style={{ fontSize: 28, fontWeight: '700', color: '#000', margin: '0 0 8px' }}>Gérants de résidences</h1>
-          <p style={{ color: '#666', margin: 0 }}>
-            Ici, on gère uniquement les comptes ayant un accès au board en tant que patron ou résidence.
-          </p>
-        </div>
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: embedded ? 'flex-end' : 'space-between',
+          alignItems: 'center',
+          gap: 16,
+          flexWrap: 'wrap',
+          marginBottom: 24,
+        }}
+      >
+        {!embedded && (
+          <div>
+            <h1 style={{ fontSize: 28, fontWeight: '700', color: '#000', margin: '0 0 8px' }}>Gérants de résidences</h1>
+            <p style={{ color: '#666', margin: 0 }}>
+              Ici, on gère uniquement les comptes ayant un accès au board en tant que patron ou résidence.
+            </p>
+          </div>
+        )}
         <button
           type="button"
           onClick={openCreate}
