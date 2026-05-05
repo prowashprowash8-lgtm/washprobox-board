@@ -233,6 +233,7 @@ export default function Emplacements() {
           .single());
       }
       if (insertErr) throw insertErr;
+
       setShowAdd(false);
       setForm({ name: '', address: '', latitude: null, longitude: null });
       setAddressSuggestions([]);

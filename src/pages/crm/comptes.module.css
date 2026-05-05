@@ -1,0 +1,13 @@
+.container { min-height: 100vh; background: #f8f9fa; }
+.wrapper { max-width: 1200px; margin: 0 auto; padding: 28px 20px 40px; }
+.title { margin: 0; font-size: 28px; }
+.subtitle { color: #666; margin-top: 8px; }
+.notice { margin: 12px 0; padding: 10px 12px; border-radius: 8px; background: #fff4d6; color: #7a5a00; }
+.form { display: grid; grid-template-columns: 1.5fr 1fr 1fr auto; gap: 10px; background: #fff; border: 1px solid #ececec; border-radius: 10px; padding: 12px; margin: 16px 0; }
+.form input,.form select,.form button,.inlineInput,.table select { border: 1px solid #d8d8d8; border-radius: 8px; padding: 8px 10px; font-size: 14px; }
+.form button { background: #0b7be6; color: white; border: none; cursor: pointer; }
+.tableWrap { background: #fff; border: 1px solid #ececec; border-radius: 10px; overflow: auto; }
+.table { width: 100%; border-collapse: collapse; }
+.table th,.table td { border-bottom: 1px solid #f1f1f1; padding: 10px; text-align: left; }
+.inlineInput { width: 100%; }
+@media (max-width: 960px) { .form { grid-template-columns: 1fr; } }

@@ -14,6 +14,15 @@ import Utilisateurs from './pages/Utilisateurs';
 import ProfileDetail from './pages/ProfileDetail';
 import Login from './pages/Login';
 import GerantsResidences from './pages/GerantsResidences';
+import CrmAccueil from './pages/crm/CrmAccueil';
+import CrmLaveries from './pages/crm/CrmLaveries';
+import CrmLaverieDetail from './pages/crm/CrmLaverieDetail';
+import CrmInterventions from './pages/crm/CrmInterventions';
+import CrmInterventionCreate from './pages/crm/CrmInterventionCreate';
+import CrmTournee from './pages/crm/CrmTournee';
+import CrmCommande from './pages/crm/CrmCommande';
+import CrmProspection from './pages/crm/CrmProspection';
+import CrmUtilisateurs from './pages/crm/CrmUtilisateurs';
 import { useAuth } from './contexts/AuthContext';
 import { useBoardAccess } from './contexts/BoardAccessContext';
 import { supabase } from './supabaseClient';
@@ -130,6 +139,14 @@ function App() {
               <MenuLink icon={<Users size={20}/>} label="Utilisateurs" to="/utilisateurs" />
               <MenuLink icon={<KeyRound size={20}/>} label="Gérants de résidences" to="/gerants-residences" />
               <MenuLink icon={<Settings size={20}/>} label="Configuration" to="/configuration" />
+              <hr style={{ width: '100%', border: '0.5px solid #F0F0F0', margin: '10px 0' }} />
+              <MenuLink icon={<LayoutDashboard size={20}/>} label="Accueil CRM" to="/crm/accueil" />
+              <MenuLink icon={<MapPin size={20}/>} label="Laveries" to="/crm/laveries" />
+              <MenuLink icon={<Target size={20}/>} label="Interventions" to="/crm/interventions" />
+              <MenuLink icon={<Receipt size={20}/>} label="Planning tournée" to="/crm/planning-tournee" />
+              <MenuLink icon={<Tablet size={20}/>} label="Commande" to="/crm/commande" />
+              <MenuLink icon={<Megaphone size={20}/>} label="Prospection" to="/crm/prospection" />
+              <MenuLink icon={<Users size={20}/>} label="Utilisateurs CRM" to="/crm/utilisateurs" />
             </>
           )}
         </nav>
@@ -181,22 +198,23 @@ function App() {
               <Route path="/utilisateurs" element={<Utilisateurs />} />
               <Route path="/utilisateurs/:id" element={<ProfileDetail />} />
               <Route path="/gerants-residences" element={<GerantsResidences />} />
-              <Route path="/configuration" element={<Placeholder title="Configuration" />} />
+              <Route path="/configuration" element={<ConfigurationPlaceholder />} />
+              <Route path="/crm/accueil" element={<CrmAccueil />} />
+              <Route path="/crm/laveries" element={<CrmLaveries />} />
+              <Route path="/crm/laveries/:id" element={<CrmLaverieDetail />} />
+              <Route path="/crm/laveries/board/:emplacementId" element={<CrmLaverieDetail />} />
+              <Route path="/crm/interventions" element={<CrmInterventions />} />
+              <Route path="/crm/intervention-create" element={<CrmInterventionCreate />} />
+              <Route path="/crm/planning-tournee" element={<CrmTournee />} />
+              <Route path="/crm/commande" element={<CrmCommande />} />
+              <Route path="/crm/prospection" element={<CrmProspection />} />
+              <Route path="/crm/utilisateurs" element={<CrmUtilisateurs />} />
             </>
           ) : null}
           <Route path="*" element={<Navigate to={isResidence ? '/emplacements' : '/'} replace />} />
         </Routes>
       </div>
     </div>
-  );
-}
-
-function Placeholder({ title }: { title: string }) {
-  return (
-    <>
-      <h1 style={{ fontSize: 28, fontWeight: '700', color: '#000' }}>{title}</h1>
-      <p style={{ color: '#666' }}>Page en cours de développement.</p>
-    </>
   );
 }
 
@@ -253,5 +271,14 @@ const MenuLink = ({
     </span>
   </NavLink>
 );
+
+function ConfigurationPlaceholder() {
+  return (
+    <>
+      <h1 style={{ fontSize: 28, fontWeight: '700', color: '#000' }}>Configuration</h1>
+      <p style={{ color: '#666' }}>Page en cours de développement.</p>
+    </>
+  );
+}
 
 export default App;

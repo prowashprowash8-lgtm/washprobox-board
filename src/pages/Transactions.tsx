@@ -19,6 +19,7 @@ interface Transaction {
   emplacement_name?: string | null;
   user_name?: string | null;
   transaction_finished_at?: string | null;
+  sort_anchor_at?: string | null;
 }
 
 interface MachineEventRow {
@@ -75,14 +76,43 @@ export default function Transactions() {
           if (!finishedByTx.has(ev.transaction_id)) finishedByTx.set(ev.transaction_id, ev.created_at);
         }
       }
-      setTransactions(
-        txs.map((t) => {
-          return {
-            ...t,
-            transaction_finished_at: finishedByTx.get(t.id) ?? null,
-          };
-        })
-      );
+      const refundDateByPromoCode = new Map<string, string>();
+      const hasPromoTransactions = txs.some((t) => t.payment_method === 'promo' && !!t.promo_code);
+      if (hasPromoTransactions) {
+        // Source de vérité pour les codes de compensation.
+        // On ne filtre pas par .in(...) pour éviter tout problème de casse / espaces.
+        const { data: refundData } = await supabase
+          .from('refund_requests')
+          .select('compensation_promo_code,created_at,statut')
+          .not('compensation_promo_code', 'is', null)
+          .eq('statut', 'approved')
+          .order('created_at', { ascending: false });
+        for (const row of (refundData ?? []) as Array<{ compensation_promo_code: string | null; created_at: string }>) {
+          const code = (row.compensation_promo_code ?? '').trim().toUpperCase();
+          if (!code) continue;
+          if (!refundDateByPromoCode.has(code)) refundDateByPromoCode.set(code, row.created_at);
+        }
+      }
+
+      const mappedTxs = txs.map((t) => {
+        const promoCode = (t.promo_code ?? '').trim().toUpperCase();
+        const refundAnchor = t.payment_method === 'promo' ? refundDateByPromoCode.get(promoCode) ?? null : null;
+        return {
+          ...t,
+          transaction_finished_at: finishedByTx.get(t.id) ?? null,
+          // Tri affichage: si code de compensation remboursé, on s'aligne sur la date
+          // du remboursement (refund_requests.created_at), sinon sur la date transaction.
+          sort_anchor_at: refundAnchor || t.created_at,
+        };
+      });
+
+      mappedTxs.sort((a, b) => {
+        const aTs = new Date(a.sort_anchor_at ?? a.created_at).getTime();
+        const bTs = new Date(b.sort_anchor_at ?? b.created_at).getTime();
+        return bTs - aTs;
+      });
+
+      setTransactions(mappedTxs);
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Erreur de chargement');
       setTransactions([]);

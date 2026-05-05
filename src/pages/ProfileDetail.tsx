@@ -196,7 +196,9 @@ export default function ProfileDetail() {
 
       if (!walActErr && walActData != null) {
         const list = Array.isArray(walActData) ? walActData : [walActData];
-        setWalletActivity(list as WalletActivityLine[]);
+        // On évite le "double débit" visuel : la transaction machine couvre déjà
+        // le paiement du cycle, donc on n'affiche pas wallet_machine_debit ici.
+        setWalletActivity((list as WalletActivityLine[]).filter((w) => w.activity_kind !== 'wallet_machine_debit'));
       } else {
         setWalletActivity([]);
       }
@@ -222,7 +224,7 @@ export default function ProfileDetail() {
     }
     if (!walActErr && walActData != null) {
       const list = Array.isArray(walActData) ? walActData : [walActData];
-      setWalletActivity(list as WalletActivityLine[]);
+      setWalletActivity((list as WalletActivityLine[]).filter((w) => w.activity_kind !== 'wallet_machine_debit'));
     }
   }, [id]);
 
