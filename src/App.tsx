@@ -232,70 +232,6 @@ function App() {
         </button>
       </div>
 
-      {/* TOP BAR MOBILE + DRAWER */}
-      {isMobile ? (
-        <>
-          {drawerOpen ? <div className={layoutStyles.drawerOverlay} onClick={() => setDrawerOpen(false)} /> : null}
-          {drawerOpen ? (
-            <aside className={layoutStyles.drawer} aria-label="Menu">
-              <div className={layoutStyles.drawerHeader}>
-                <img src="/logo_washpro.png" alt="Wash Pro" className={layoutStyles.drawerLogo} />
-                <button className={layoutStyles.drawerCloseBtn} type="button" onClick={() => setDrawerOpen(false)} aria-label="Fermer le menu">
-                  <X size={20} />
-                </button>
-              </div>
-              <nav style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                <MenuLink icon={<LayoutDashboard size={20}/>} label="Accueil" to={isCrmOnly ? '/crm/accueil' : '/'} />
-                {canUseBoard && <MenuLink icon={<MapPin size={20}/>} label="Emplacements" to="/emplacements" />}
-                {canUseBoard && isPatron && (
-                  <>
-                    <MenuLink icon={<Receipt size={20}/>} label="Transactions" to="/transactions" />
-                    <MenuLink icon={<Tablet size={20}/>} label="Appareils" to="/appareils" />
-                    <MenuLink icon={<Megaphone size={20}/>} label="Marketing" to="/marketing" />
-                    <MenuLink icon={<Target size={20}/>} label="Missions" to="/missions" />
-                    <MenuLink icon={<RotateCcw size={20}/>} label="Remboursements" to="/remboursements" badge={pendingRefundCount} />
-                    <MenuLink icon={<Users size={20}/>} label="Utilisateurs" to="/utilisateurs" />
-                    <MenuLink icon={<Settings size={20}/>} label="Configuration" to="/configuration" />
-                  </>
-                )}
-                {canUseCrm ? (
-                  <>
-                    <hr style={{ width: '100%', border: '0.5px solid #F0F0F0', margin: '8px 0' }} />
-                    <MenuLink icon={<LayoutDashboard size={20}/>} label="Accueil CRM" to="/crm/accueil" />
-                    <MenuLink icon={<MapPin size={20}/>} label="Laveries" to="/crm/laveries" />
-                    <MenuLink icon={<Target size={20}/>} label="Interventions" to="/crm/interventions" />
-                    <MenuLink icon={<Receipt size={20}/>} label="Planning tournée" to="/crm/planning-tournee" />
-                    <MenuLink icon={<Tablet size={20}/>} label="Commande" to="/crm/commande" />
-                    <MenuLink icon={<Megaphone size={20}/>} label="Prospection" to="/crm/prospection" />
-                    {canManageCrmUsers && <MenuLink icon={<Users size={20}/>} label="Utilisateurs & accès" to="/crm/utilisateurs" />}
-                  </>
-                ) : null}
-                <hr style={{ width: '100%', border: '0.5px solid #F0F0F0', margin: '8px 0' }} />
-                <button
-                  onClick={() => signOut().then(() => navigate('/'))}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 12,
-                    padding: '10px 12px',
-                    background: 'none',
-                    border: '1px solid #eee',
-                    borderRadius: 12,
-                    cursor: 'pointer',
-                    color: '#444',
-                    fontSize: 14,
-                    fontWeight: 600,
-                  }}
-                >
-                  <LogOut size={18} />
-                  Se déconnecter
-                </button>
-              </nav>
-            </aside>
-          ) : null}
-        </>
-      ) : null}
-
       {/* CONTENU PRINCIPAL — minHeight:0 indispensable pour que overflow fonctionne en flex */}
       <div className={layoutStyles.content} style={{ padding: isMobile ? undefined : 40 }}>
         {isMobile ? (
@@ -370,6 +306,75 @@ function App() {
           )}
         </Routes>
       </div>
+
+      {/* DRAWER MOBILE (au-dessus de tout) */}
+      {isMobile ? (
+        <>
+          {drawerOpen ? <div className={layoutStyles.drawerOverlay} onClick={() => setDrawerOpen(false)} /> : null}
+          {drawerOpen ? (
+            <aside className={layoutStyles.drawer} aria-label="Menu">
+              <div className={layoutStyles.drawerHeader}>
+                <img src="/logo_washpro.png" alt="Wash Pro" className={layoutStyles.drawerLogo} />
+                <button
+                  className={layoutStyles.drawerCloseBtn}
+                  type="button"
+                  onClick={() => setDrawerOpen(false)}
+                  aria-label="Fermer le menu"
+                >
+                  <X size={20} />
+                </button>
+              </div>
+              <nav style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <MenuLink icon={<LayoutDashboard size={20}/>} label="Accueil" to={isCrmOnly ? '/crm/accueil' : '/'} />
+                {canUseBoard && <MenuLink icon={<MapPin size={20}/>} label="Emplacements" to="/emplacements" />}
+                {canUseBoard && isPatron && (
+                  <>
+                    <MenuLink icon={<Receipt size={20}/>} label="Transactions" to="/transactions" />
+                    <MenuLink icon={<Tablet size={20}/>} label="Appareils" to="/appareils" />
+                    <MenuLink icon={<Megaphone size={20}/>} label="Marketing" to="/marketing" />
+                    <MenuLink icon={<Target size={20}/>} label="Missions" to="/missions" />
+                    <MenuLink icon={<RotateCcw size={20}/>} label="Remboursements" to="/remboursements" badge={pendingRefundCount} />
+                    <MenuLink icon={<Users size={20}/>} label="Utilisateurs" to="/utilisateurs" />
+                    <MenuLink icon={<Settings size={20}/>} label="Configuration" to="/configuration" />
+                  </>
+                )}
+                {canUseCrm ? (
+                  <>
+                    <hr style={{ width: '100%', border: '0.5px solid #F0F0F0', margin: '8px 0' }} />
+                    <MenuLink icon={<LayoutDashboard size={20}/>} label="Accueil CRM" to="/crm/accueil" />
+                    <MenuLink icon={<MapPin size={20}/>} label="Laveries" to="/crm/laveries" />
+                    <MenuLink icon={<Target size={20}/>} label="Interventions" to="/crm/interventions" />
+                    <MenuLink icon={<Receipt size={20}/>} label="Planning tournée" to="/crm/planning-tournee" />
+                    <MenuLink icon={<Tablet size={20}/>} label="Commande" to="/crm/commande" />
+                    <MenuLink icon={<Megaphone size={20}/>} label="Prospection" to="/crm/prospection" />
+                    {canManageCrmUsers && <MenuLink icon={<Users size={20}/>} label="Utilisateurs & accès" to="/crm/utilisateurs" />}
+                  </>
+                ) : null}
+                <hr style={{ width: '100%', border: '0.5px solid #F0F0F0', margin: '8px 0' }} />
+                <button
+                  onClick={() => signOut().then(() => navigate('/'))}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 12,
+                    padding: '10px 12px',
+                    background: 'none',
+                    border: '1px solid #eee',
+                    borderRadius: 12,
+                    cursor: 'pointer',
+                    color: '#444',
+                    fontSize: 14,
+                    fontWeight: 600,
+                  }}
+                >
+                  <LogOut size={18} />
+                  Se déconnecter
+                </button>
+              </nav>
+            </aside>
+          ) : null}
+        </>
+      ) : null}
     </div>
   );
 }

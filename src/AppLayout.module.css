@@ -44,25 +44,31 @@
 }
 
 @media (max-width: 900px) {
+  .appRoot {
+    flex-direction: column;
+  }
+
   .sidebar {
     display: none;
   }
 
   .content {
     padding: 16px;
-    padding-top: calc(14px + env(safe-area-inset-top));
+    /* Laisse la place pour la topbar fixe */
+    padding-top: calc(64px + env(safe-area-inset-top));
   }
 
   .mobileTopbar {
-    position: sticky;
+    position: fixed;
     top: 0;
+    left: 0;
+    right: 0;
     z-index: 50;
     display: flex;
     align-items: center;
     justify-content: space-between;
     gap: 12px;
     padding: calc(10px + env(safe-area-inset-top)) 12px 10px;
-    margin: -16px -16px 16px;
     background: rgba(255, 255, 255, 0.85);
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
@@ -117,6 +123,7 @@
     z-index: 1000;
     display: block;
     background: rgba(0, 0, 0, 0.4);
+    touch-action: none;
   }
 
   .drawer {
@@ -131,6 +138,7 @@
     overflow-y: auto;
     -webkit-overflow-scrolling: touch;
     box-shadow: 0 18px 50px rgba(0, 0, 0, 0.18);
+    touch-action: pan-y;
   }
 
   .drawerHeader {
