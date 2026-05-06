@@ -47,6 +47,8 @@
 @media (max-width: 900px) {
   .appRoot {
     flex-direction: column;
+    /* iOS Safari: éviter le scroll dans un div (bugs fixed/click) */
+    overflow: auto;
   }
 
   .sidebar {
@@ -55,15 +57,13 @@
 
   .content {
     padding: 16px;
-    /* Laisse la place pour la topbar fixe */
-    padding-top: calc(64px + env(safe-area-inset-top));
+    overflow: visible;
+    -webkit-overflow-scrolling: auto;
   }
 
   .mobileTopbar {
-    position: fixed;
+    position: sticky;
     top: 0;
-    left: 0;
-    right: 0;
     z-index: 50;
     display: flex;
     align-items: center;
@@ -74,6 +74,7 @@
     backdrop-filter: blur(12px);
     -webkit-backdrop-filter: blur(12px);
     border-bottom: 1px solid rgba(238, 238, 238, 0.9);
+    margin: -16px -16px 16px;
   }
 
   .mobileTopbarLeft {
