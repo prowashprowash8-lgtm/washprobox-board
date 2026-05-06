@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { Routes, Route, NavLink, Navigate, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Receipt, MapPin, Tablet, Settings, Users, Megaphone, Target, LogOut, RotateCcw } from 'lucide-react';
+import { Routes, Route, NavLink, Navigate, useLocation, useNavigate } from 'react-router-dom';
+import { LayoutDashboard, Receipt, MapPin, Tablet, Settings, Users, Megaphone, Target, LogOut, RotateCcw, Menu, X } from 'lucide-react';
 import Accueil from './pages/Accueil';
 import Appareils from './pages/Appareils';
 import Emplacements from './pages/Emplacements';
@@ -26,15 +26,19 @@ import CrmUtilisateurDetail from './pages/crm/CrmUtilisateurDetail';
 import { useAuth } from './contexts/AuthContext';
 import { useBoardAccess } from './contexts/BoardAccessContext';
 import { supabase } from './supabaseClient';
+import layoutStyles from './AppLayout.module.css';
 
 function App() {
   const { user, loading, signOut } = useAuth();
   const { loading: accessLoading, isPatron, isResidence } = useBoardAccess();
   const navigate = useNavigate();
+  const location = useLocation();
   const [pendingRefundCount, setPendingRefundCount] = useState(0);
   const [crmLoading, setCrmLoading] = useState(true);
   const [crmActive, setCrmActive] = useState(false);
   const [crmRole, setCrmRole] = useState<'patron' | 'salarie' | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+  const [isMobile, setIsMobile] = useState(false);
 
   const fetchPendingRefundCount = useCallback(async () => {
     if (!isPatron) {
@@ -112,6 +116,27 @@ function App() {
     void loadCrmRole();
   }, [user]);
 
+  useEffect(() => {
+    const mql = window.matchMedia('(max-width: 900px)');
+    const apply = () => setIsMobile(Boolean(mql.matches));
+    apply();
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const onChange = (e: any) => setIsMobile(Boolean(e.matches));
+    if ('addEventListener' in mql) mql.addEventListener('change', onChange);
+    // @ts-expect-error old safari
+    else mql.addListener(onChange);
+    return () => {
+      if ('removeEventListener' in mql) mql.removeEventListener('change', onChange);
+      // @ts-expect-error old safari
+      else mql.removeListener(onChange);
+    };
+  }, []);
+
+  useEffect(() => {
+    // Fermer le drawer au changement de page.
+    setDrawerOpen(false);
+  }, [location.pathname, location.search]);
+
   // Règle métier : un compte CRM "salarié" ne doit JAMAIS voir le board, même s'il a un rôle board.
   const isCrmOnly = crmActive && crmRole === 'salarie';
 
@@ -131,34 +156,29 @@ function App() {
     return <Login onSuccess={() => navigate('/')} />;
   }
 
+  const mobileTitle =
+    location.pathname.startsWith('/crm/')
+      ? 'CRM'
+      : location.pathname.startsWith('/emplacements')
+        ? 'Emplacements'
+        : location.pathname.startsWith('/transactions')
+          ? 'Transactions'
+          : location.pathname.startsWith('/appareils')
+            ? 'Appareils'
+            : location.pathname.startsWith('/utilisateurs')
+              ? 'Utilisateurs'
+              : location.pathname.startsWith('/missions')
+                ? 'Missions'
+                : location.pathname.startsWith('/marketing')
+                  ? 'Marketing'
+                  : location.pathname.startsWith('/remboursements')
+                    ? 'Remboursements'
+                    : 'Board';
+
   return (
-    <div
-      style={{
-        display: 'flex',
-        width: '100%',
-        height: '100%',
-        minHeight: '100vh',
-        backgroundColor: '#F8F9FA',
-        fontFamily: 'sans-serif',
-        overflow: 'hidden',
-      }}
-    >
+    <div className={layoutStyles.appRoot}>
       {/* BARRE LATÉRALE (SIDEBAR) */}
-      <div
-        style={{
-          width: 250,
-          flexShrink: 0,
-          alignSelf: 'stretch',
-          minHeight: 0,
-          backgroundColor: '#FFFFFF',
-          borderRight: '1px solid #EEE',
-          padding: 20,
-          overflowY: 'auto',
-          display: 'flex',
-          flexDirection: 'column',
-          WebkitOverflowScrolling: 'touch',
-        }}
-      >
+      <div className={layoutStyles.sidebar}>
         <div style={{ padding: '0 15px', marginBottom: 24 }}>
           <img src="/logo_washpro.png" alt="Wash Pro" style={{ height: 40, objectFit: 'contain', display: 'block' }} />
         </div>
@@ -212,18 +232,87 @@ function App() {
         </button>
       </div>
 
+      {/* TOP BAR MOBILE + DRAWER */}
+      {isMobile ? (
+        <>
+          {drawerOpen ? <div className={layoutStyles.drawerOverlay} onClick={() => setDrawerOpen(false)} /> : null}
+          {drawerOpen ? (
+            <aside className={layoutStyles.drawer} aria-label="Menu">
+              <div className={layoutStyles.drawerHeader}>
+                <img src="/logo_washpro.png" alt="Wash Pro" className={layoutStyles.drawerLogo} />
+                <button className={layoutStyles.drawerCloseBtn} type="button" onClick={() => setDrawerOpen(false)} aria-label="Fermer le menu">
+                  <X size={20} />
+                </button>
+              </div>
+              <nav style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+                <MenuLink icon={<LayoutDashboard size={20}/>} label="Accueil" to={isCrmOnly ? '/crm/accueil' : '/'} />
+                {canUseBoard && <MenuLink icon={<MapPin size={20}/>} label="Emplacements" to="/emplacements" />}
+                {canUseBoard && isPatron && (
+                  <>
+                    <MenuLink icon={<Receipt size={20}/>} label="Transactions" to="/transactions" />
+                    <MenuLink icon={<Tablet size={20}/>} label="Appareils" to="/appareils" />
+                    <MenuLink icon={<Megaphone size={20}/>} label="Marketing" to="/marketing" />
+                    <MenuLink icon={<Target size={20}/>} label="Missions" to="/missions" />
+                    <MenuLink icon={<RotateCcw size={20}/>} label="Remboursements" to="/remboursements" badge={pendingRefundCount} />
+                    <MenuLink icon={<Users size={20}/>} label="Utilisateurs" to="/utilisateurs" />
+                    <MenuLink icon={<Settings size={20}/>} label="Configuration" to="/configuration" />
+                  </>
+                )}
+                {canUseCrm ? (
+                  <>
+                    <hr style={{ width: '100%', border: '0.5px solid #F0F0F0', margin: '8px 0' }} />
+                    <MenuLink icon={<LayoutDashboard size={20}/>} label="Accueil CRM" to="/crm/accueil" />
+                    <MenuLink icon={<MapPin size={20}/>} label="Laveries" to="/crm/laveries" />
+                    <MenuLink icon={<Target size={20}/>} label="Interventions" to="/crm/interventions" />
+                    <MenuLink icon={<Receipt size={20}/>} label="Planning tournée" to="/crm/planning-tournee" />
+                    <MenuLink icon={<Tablet size={20}/>} label="Commande" to="/crm/commande" />
+                    <MenuLink icon={<Megaphone size={20}/>} label="Prospection" to="/crm/prospection" />
+                    {canManageCrmUsers && <MenuLink icon={<Users size={20}/>} label="Utilisateurs & accès" to="/crm/utilisateurs" />}
+                  </>
+                ) : null}
+                <hr style={{ width: '100%', border: '0.5px solid #F0F0F0', margin: '8px 0' }} />
+                <button
+                  onClick={() => signOut().then(() => navigate('/'))}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 12,
+                    padding: '10px 12px',
+                    background: 'none',
+                    border: '1px solid #eee',
+                    borderRadius: 12,
+                    cursor: 'pointer',
+                    color: '#444',
+                    fontSize: 14,
+                    fontWeight: 600,
+                  }}
+                >
+                  <LogOut size={18} />
+                  Se déconnecter
+                </button>
+              </nav>
+            </aside>
+          ) : null}
+        </>
+      ) : null}
+
       {/* CONTENU PRINCIPAL — minHeight:0 indispensable pour que overflow fonctionne en flex */}
-      <div
-        style={{
-          flex: 1,
-          minWidth: 0,
-          minHeight: 0,
-          padding: 40,
-          overflowY: 'auto',
-          overflowX: 'hidden',
-          WebkitOverflowScrolling: 'touch',
-        }}
-      >
+      <div className={layoutStyles.content} style={{ padding: isMobile ? undefined : 40 }}>
+        {isMobile ? (
+          <div className={layoutStyles.mobileTopbar}>
+            <div className={layoutStyles.mobileTopbarLeft}>
+              <button className={layoutStyles.burgerBtn} type="button" onClick={() => setDrawerOpen(true)} aria-label="Ouvrir le menu">
+                <Menu size={20} />
+              </button>
+              <div className={layoutStyles.mobileTitleWrap}>
+                <p className={layoutStyles.mobileTitle}>{mobileTitle}</p>
+                <p className={layoutStyles.mobileSubtitle}>
+                  {isCrmOnly ? 'Accès CRM' : isResidence ? 'Accès résidence' : 'Accès patron'}
+                </p>
+              </div>
+            </div>
+          </div>
+        ) : null}
         <Routes>
           {/* Mode CRM-only (salarié CRM) : pas d'accès aux pages board */}
           {isCrmOnly ? (
