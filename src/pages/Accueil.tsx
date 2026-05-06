@@ -105,10 +105,7 @@ export default function Accueil() {
           <p style={{ color: '#666', margin: '8px 0 0' }}>
             {isResidence
               ? 'Vue résidence : uniquement vos laveries et leur chiffre d’affaires.'
-              : 'Statistiques de vos appareils connectés (ESP32). Revenus = cartes + portefeuille (hors codes promo gratuits).'}
-            <span style={{ display: 'block', marginTop: 6, fontSize: 13, color: '#999' }}>
-              « Aujourd’hui » = uniquement le jour en cours. Pour inclure les paiements d’hier, utilisez « Ce mois » ou « Cette année ».
-            </span>
+              : 'Statistiques de vos appareils connectés.'}
           </p>
         </div>
         <div style={{ display: 'flex', gap: 8 }}>

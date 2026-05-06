@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Trash2 } from 'lucide-react';
+import { Pencil, Trash2 } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { COLORS } from '../../lib/constants';
 import styles from './planning.module.css';
@@ -46,6 +46,10 @@ export default function CrmInterventions() {
     await supabase.from('interventions').delete().eq('id', id);
     await loadData();
   };
+
+  const handleEditIntervention = (id: number) => {
+    navigate(`/crm/interventions/${id}/edit`);
+  };
   const formatMotif = (motif: string) => (motif === 'gestion' ? 'Gestion' : motif === 'reparation' ? 'Réparation' : 'Gestion & Réparation');
   const getMotifColor = (motif: string) => (motif === 'gestion' ? '#43e97b' : motif === 'reparation' ? '#fa709a' : '#667eea');
   const interventionsFiltrees = (selectedUserId === 'ALL' ? interventions : interventions.filter((i) => i.user_id === selectedUserId)).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
@@ -88,7 +92,28 @@ export default function CrmInterventions() {
             <div className={styles.interventionsList}>
               {interventionsFiltrees.map((intervention) => (
                 <div key={intervention.id} className={styles.interventionCard}>
-                  <div className={styles.interventionTop}><div><h3 className={styles.interventionLaverie}>{intervention.laverie_name}</h3><p className={styles.interventionVille}>{intervention.laverie_ville}</p>{selectedUserId === 'ALL' && <p className={styles.interventionTechnicien}>{users.find((u) => u.id === intervention.user_id)?.first_name || 'Inconnu'}</p>}</div><button className={styles.btnDeleteIntervention} onClick={() => void handleDeleteIntervention(intervention.id)}><Trash2 size={16} strokeWidth={2} /></button></div>
+                  <div className={styles.interventionTop}>
+                    <div>
+                      <h3 className={styles.interventionLaverie}>{intervention.laverie_name}</h3>
+                      <p className={styles.interventionVille}>{intervention.laverie_ville}</p>
+                      {selectedUserId === 'ALL' && (
+                        <p className={styles.interventionTechnicien}>{users.find((u) => u.id === intervention.user_id)?.first_name || 'Inconnu'}</p>
+                      )}
+                    </div>
+                    <div style={{ display: 'flex', gap: 8 }}>
+                      <button
+                        className={styles.btnDeleteIntervention}
+                        onClick={() => handleEditIntervention(intervention.id)}
+                        title="Modifier"
+                        style={{ background: '#F5F5F5' }}
+                      >
+                        <Pencil size={16} strokeWidth={2} />
+                      </button>
+                      <button className={styles.btnDeleteIntervention} onClick={() => void handleDeleteIntervention(intervention.id)} title="Supprimer">
+                        <Trash2 size={16} strokeWidth={2} />
+                      </button>
+                    </div>
+                  </div>
                   <div className={styles.interventionDetails}><div className={styles.interventionDate}>{new Date(intervention.date).toLocaleDateString('fr-FR', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}</div><div className={styles.interventionMotif} style={{ background: getMotifColor(intervention.motif) }}>{formatMotif(intervention.motif)}</div>{intervention.description && <div className={styles.interventionDescription}>{intervention.description}</div>}</div>
                 </div>
               ))}

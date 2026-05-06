@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { supabase } from '../../supabaseClient';
 import styles from './comptes.module.css';
 
@@ -16,11 +17,12 @@ type CrmUtilisateursProps = {
 };
 
 export default function CrmUtilisateurs({ embedded = false }: CrmUtilisateursProps) {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [rows, setRows] = useState<CrmUser[]>([]);
   const [notice, setNotice] = useState<string | null>(null);
-  const [newUser, setNewUser] = useState({ email: '', first_name: '', role: 'salarie' as Role });
+  const [newUser, setNewUser] = useState({ email: '', first_name: '', role: 'salarie' as Role, password: '' });
 
   const load = async () => {
     setLoading(true);
@@ -40,17 +42,28 @@ export default function CrmUtilisateurs({ embedded = false }: CrmUtilisateursPro
   const createUser = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newUser.email.trim()) return;
+    if (!newUser.password || newUser.password.length < 8) {
+      setNotice('Mot de passe requis (8 caractères minimum).');
+      return;
+    }
     setSaving(true);
-    const { error } = await supabase.from('crm_users').insert([
-      { email: newUser.email.trim(), first_name: newUser.first_name.trim() || null, role: newUser.role, is_active: true },
-    ]);
-    if (error) {
-      setNotice(error.message);
+    const { data, error: invokeErr } = await supabase.functions.invoke('manage-crm-users', {
+      body: {
+        mode: 'create',
+        email: newUser.email.trim(),
+        password: newUser.password,
+        first_name: newUser.first_name.trim() || null,
+        role: newUser.role,
+        is_active: true,
+      },
+    });
+    if (invokeErr || data?.error) {
+      setNotice(String(data?.error ?? invokeErr?.message ?? 'Création impossible.'));
       setSaving(false);
       return;
     }
     setNotice('Compte CRM créé.');
-    setNewUser({ email: '', first_name: '', role: 'salarie' });
+    setNewUser({ email: '', first_name: '', role: 'salarie', password: '' });
     await load();
     setSaving(false);
   };
@@ -80,6 +93,14 @@ export default function CrmUtilisateurs({ embedded = false }: CrmUtilisateursPro
           required
         />
         <input
+          type="password"
+          placeholder="Mot de passe (min. 8)"
+          value={newUser.password}
+          onChange={(e) => setNewUser((prev) => ({ ...prev, password: e.target.value }))}
+          minLength={8}
+          required
+        />
+        <input
           type="text"
           placeholder="Prénom"
           value={newUser.first_name}
@@ -99,11 +120,34 @@ export default function CrmUtilisateurs({ embedded = false }: CrmUtilisateursPro
             <thead><tr><th>Email</th><th>Prénom</th><th>Rôle</th><th>Actif</th></tr></thead>
             <tbody>
               {rows.map((row) => (
-                <tr key={row.id}>
+                <tr
+                  key={row.id}
+                  onClick={() => navigate(`/crm/utilisateurs/${row.id}`)}
+                  style={{ cursor: 'pointer' }}
+                  title="Ouvrir le dossier utilisateur (planning, clôtures, commandes)"
+                >
                   <td>{row.email}</td>
-                  <td><input className={styles.inlineInput} value={row.first_name ?? ''} onChange={(e) => setRows((prev) => prev.map((item) => (item.id === row.id ? { ...item, first_name: e.target.value } : item)))} onBlur={(e) => void patchUser(row.id, { first_name: e.target.value || null })} /></td>
-                  <td><select value={row.role} onChange={(e) => void patchUser(row.id, { role: e.target.value as Role })}><option value="salarie">Salarié</option><option value="patron">Patron</option></select></td>
-                  <td><input type="checkbox" checked={row.is_active} onChange={(e) => void patchUser(row.id, { is_active: e.target.checked })} /></td>
+                  <td onClick={(e) => e.stopPropagation()}>
+                    <input
+                      className={styles.inlineInput}
+                      value={row.first_name ?? ''}
+                      onChange={(e) =>
+                        setRows((prev) =>
+                          prev.map((item) => (item.id === row.id ? { ...item, first_name: e.target.value } : item))
+                        )
+                      }
+                      onBlur={(e) => void patchUser(row.id, { first_name: e.target.value || null })}
+                    />
+                  </td>
+                  <td onClick={(e) => e.stopPropagation()}>
+                    <select value={row.role} onChange={(e) => void patchUser(row.id, { role: e.target.value as Role })}>
+                      <option value="salarie">Salarié</option>
+                      <option value="patron">Patron</option>
+                    </select>
+                  </td>
+                  <td onClick={(e) => e.stopPropagation()}>
+                    <input type="checkbox" checked={row.is_active} onChange={(e) => void patchUser(row.id, { is_active: e.target.checked })} />
+                  </td>
                 </tr>
               ))}
             </tbody>

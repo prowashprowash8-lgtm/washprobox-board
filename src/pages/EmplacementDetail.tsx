@@ -39,6 +39,7 @@ interface HistoriqueRow {
   compte_rendu: string;
   pieces_changees: string | null;
   description: string | null;
+  technicien_id?: string | null;
   technicien_nom?: string | null;
   created_at?: string | null;
 }
@@ -146,7 +147,7 @@ export default function EmplacementDetail() {
           setCrmLaverieIdForLink(crmSiteId);
           const histRes = await supabase
             .from('historique')
-            .select('id, date_intervention, motif, compte_rendu, pieces_changees, description, technicien_nom, created_at')
+            .select('id, date_intervention, motif, compte_rendu, pieces_changees, description, technicien_id, technicien_nom, created_at')
             .eq('laverie_id', crmSiteId)
             .order('date_intervention', { ascending: false });
 
@@ -186,7 +187,7 @@ export default function EmplacementDetail() {
       setCrmLaverieIdForLink(crmSiteId);
       const histRes = await supabase
         .from('historique')
-        .select('id, date_intervention, motif, compte_rendu, pieces_changees, description, technicien_nom, created_at')
+        .select('id, date_intervention, motif, compte_rendu, pieces_changees, description, technicien_id, technicien_nom, created_at')
         .eq('laverie_id', crmSiteId)
         .order('date_intervention', { ascending: false });
 

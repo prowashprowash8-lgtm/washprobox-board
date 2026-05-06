@@ -3,26 +3,6 @@ import { supabase } from '../supabaseClient';
 
 type BoardRole = 'patron' | 'residence';
 
-interface ProfileRow {
-  id: string;
-  email?: string | null;
-  first_name?: string | null;
-  last_name?: string | null;
-  full_name?: string | null;
-  prenom?: string | null;
-  nom?: string | null;
-}
-
-interface RoleRow {
-  user_id: string;
-  role: BoardRole;
-}
-
-interface AccessRow {
-  user_id: string;
-  emplacement_id: string;
-}
-
 interface EmplacementRow {
   id: string;
   name: string;
@@ -35,16 +15,6 @@ interface ManagerRow {
   name: string;
   role: BoardRole | null;
   emplacementIds: string[];
-}
-
-function displayName(p: ProfileRow): string {
-  return (
-    p.full_name ||
-    [p.first_name, p.last_name].filter(Boolean).join(' ') ||
-    (p.prenom && p.nom ? `${p.prenom} ${p.nom}` : p.prenom || p.nom) ||
-    p.email ||
-    '—'
-  );
 }
 
 function sortByName<T extends { name: string }>(rows: T[]): T[] {
@@ -158,49 +128,29 @@ export default function GerantsResidences({ embedded = false }: GerantsResidence
     setLoading(true);
     setError(null);
     try {
-      const [{ data: roles, error: rolesErr }, { data: accesses, error: accessesErr }, { data: emplacementsData, error: emplacementsErr }] =
-        await Promise.all([
-          supabase.from('board_account_roles').select('user_id, role'),
-          supabase.from('board_account_emplacements').select('user_id, emplacement_id'),
-          supabase.from('emplacements').select('id, name, address').order('name'),
-        ]);
+      const [{ data: emplacementsData, error: emplacementsErr }, { data, error: invokeErr }] = await Promise.all([
+        supabase.from('emplacements').select('id, name, address').order('name'),
+        supabase.functions.invoke('manage-board-accounts', { body: { mode: 'list' } }),
+      ]);
 
-      if (rolesErr) throw rolesErr;
-      if (accessesErr) throw accessesErr;
       if (emplacementsErr) throw emplacementsErr;
+      if (invokeErr) throw new Error(await resolveFunctionErrorMessage(invokeErr, 'Chargement impossible'));
+      if (data?.error) throw new Error(String(data.error));
 
-      const roleRows = (roles ?? []) as RoleRow[];
-      const roleMap = new Map((roles ?? []).map((r: RoleRow) => [r.user_id, r.role]));
-      const accessMap = new Map<string, string[]>();
-      (accesses ?? []).forEach((row: AccessRow) => {
-        const list = accessMap.get(row.user_id) ?? [];
-        list.push(row.emplacement_id);
-        accessMap.set(row.user_id, list);
-      });
+      const managersRaw = (data?.managers ?? []) as Array<{
+        id: string;
+        role: BoardRole;
+        email: string | null;
+        emplacement_ids: string[];
+      }>;
 
-      let profileMap = new Map<string, ProfileRow>();
-      const userIds = roleRows.map((r) => r.user_id);
-      if (userIds.length > 0) {
-        const { data: profiles, error: profilesErr } = await supabase
-          .from('profiles')
-          .select('*')
-          .in('id', userIds);
-        if (profilesErr) throw profilesErr;
-        profileMap = new Map(
-          (profiles ?? []).map((p: ProfileRow) => [p.id, p])
-        );
-      }
-
-      const rows = roleRows.map((roleRow) => {
-        const profile = profileMap.get(roleRow.user_id);
-        return {
-          id: roleRow.user_id,
-          email: profile?.email ?? 'Email inconnu',
-          name: profile ? displayName(profile) : roleRow.user_id,
-          role: roleMap.get(roleRow.user_id) ?? null,
-          emplacementIds: accessMap.get(roleRow.user_id) ?? [],
-        };
-      });
+      const rows: ManagerRow[] = managersRaw.map((m) => ({
+        id: m.id,
+        email: m.email ?? 'Email inconnu',
+        name: m.email ?? m.id,
+        role: m.role ?? null,
+        emplacementIds: Array.isArray(m.emplacement_ids) ? m.emplacement_ids : [],
+      }));
 
       setManagers(sortByName(rows));
       setEmplacements((emplacementsData ?? []) as EmplacementRow[]);

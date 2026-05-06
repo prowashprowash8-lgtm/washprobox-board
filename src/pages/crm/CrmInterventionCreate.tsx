@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useEffect, useMemo, useState } from 'react';
+import { useNavigate, useParams } from 'react-router-dom';
 import { supabase } from '../../supabaseClient';
 import styles from './intervention.module.css';
 
@@ -24,6 +24,9 @@ interface Emplacement {
 
 export default function CrmInterventionCreate() {
   const navigate = useNavigate();
+  const { id } = useParams();
+  const editId = String(id ?? '').trim();
+  const isEdit = Boolean(editId);
   const [users, setUsers] = useState<User[]>([]);
   const [crmLaveries, setCrmLaveries] = useState<Laverie[]>([]);
   const [emplacements, setEmplacements] = useState<Emplacement[]>([]);
@@ -43,11 +46,12 @@ export default function CrmInterventionCreate() {
   useEffect(() => {
     const loadData = async () => {
       setLoadError(null);
-      const [crmUsersData, usersData, laveriesData, emplacementsData] = await Promise.all([
+      const [crmUsersData, usersData, laveriesData, emplacementsData, interventionData] = await Promise.all([
         supabase.from('crm_users').select('id, first_name, role, email, is_active').eq('is_active', true).order('first_name', { ascending: true }),
         supabase.from('users').select('id, first_name, role, email').order('first_name', { ascending: true }),
         supabase.from('laveries').select('*').order('nom', { ascending: true }),
         supabase.from('emplacements').select('id, name, address').order('name', { ascending: true }),
+        isEdit ? supabase.from('interventions').select('*').eq('id', Number(editId)).maybeSingle() : Promise.resolve({ data: null, error: null }),
       ]);
       if (!crmUsersData.error && crmUsersData.data?.length) setUsers(crmUsersData.data as User[]);
       else if (!usersData.error) setUsers((usersData.data ?? []) as User[]);
@@ -63,10 +67,34 @@ export default function CrmInterventionCreate() {
       } else {
         setEmplacements((emplacementsData.data ?? []) as Emplacement[]);
       }
+
+      if (isEdit) {
+        if (interventionData?.error) {
+          setLoadError((prev) => (prev ? `${prev} — ` : '') + `Intervention : ${interventionData.error.message}`);
+        } else if (interventionData?.data) {
+          const it = interventionData.data as {
+            id: number;
+            user_id: string;
+            laverie_id: string;
+            motif: 'gestion' | 'reparation' | 'gestion-reparation';
+            description: string;
+            date: string;
+          };
+          setFormData({
+            userId: it.user_id,
+            laverieId: it.laverie_id,
+            motif: it.motif,
+            description: it.description ?? '',
+            date: it.date,
+          });
+        } else {
+          setLoadError((prev) => (prev ? `${prev} — ` : '') + 'Intervention introuvable.');
+        }
+      }
       setLoading(false);
     };
     void loadData();
-  }, []);
+  }, [isEdit, editId]);
 
   const boardLaverieOptions = emplacements.filter(
     (emp) =>
@@ -81,13 +109,18 @@ export default function CrmInterventionCreate() {
     if (!formData.userId) newErrors.userId = 'Veuillez sélectionner un technicien';
     if (!formData.laverieId) newErrors.laverieId = 'Veuillez sélectionner une laverie';
     if (!formData.date) newErrors.date = 'Veuillez sélectionner une date';
-    const selectedDate = new Date(formData.date);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    if (selectedDate < today) newErrors.date = 'La date doit être dans le futur';
+    // En édition, on autorise de garder une date passée (cas intervention déjà échue mais pas clôturée).
+    if (!isEdit) {
+      const selectedDate = new Date(formData.date);
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      if (selectedDate < today) newErrors.date = 'La date doit être dans le futur';
+    }
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
+
+  const crmLaveriesById = useMemo(() => new Map(crmLaveries.map((l) => [l.id, l])), [crmLaveries]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -105,7 +138,8 @@ export default function CrmInterventionCreate() {
     let laverieName = '';
     let laverieVille = '';
 
-    if (laverieId.startsWith('board:')) {
+    // En édition, `laverieId` est déjà un id CRM (uuid) car l'intervention stocke `laverie_id`.
+    if (!isEdit && laverieId.startsWith('board:')) {
       const empId = laverieId.replace('board:', '');
       const emp = emplacements.find((item) => item.id === empId);
       if (!emp?.name?.trim()) {
@@ -130,7 +164,7 @@ export default function CrmInterventionCreate() {
       laverieName = (lavRes.data?.nom ?? emp.name ?? '').trim() || 'Sans nom';
       laverieVille = (lavRes.data?.ville ?? '').trim() || 'Ville à compléter';
     } else {
-      const laverie = crmLaveries.find((l) => l.id === laverieId);
+      const laverie = crmLaveriesById.get(laverieId) ?? null;
       if (!laverie) {
         setSubmitting(false);
         return;
@@ -139,18 +173,20 @@ export default function CrmInterventionCreate() {
       laverieVille = (laverie.ville || '').trim() || 'Ville à compléter';
     }
 
-    const { error } = await supabase.from('interventions').insert([
-      {
-        user_id: user.id,
-        laverie_id: laverieId,
-        laverie_name: laverieName,
-        laverie_ville: laverieVille,
-        motif: formData.motif,
-        description: formData.description,
-        date: formData.date,
-        statut: 'planifie',
-      },
-    ]);
+    const payload = {
+      user_id: user.id,
+      laverie_id: laverieId,
+      laverie_name: laverieName,
+      laverie_ville: laverieVille,
+      motif: formData.motif,
+      description: formData.description,
+      date: formData.date,
+      statut: 'planifie',
+    };
+
+    const { error } = isEdit
+      ? await supabase.from('interventions').update(payload).eq('id', Number(editId))
+      : await supabase.from('interventions').insert([payload]);
     setSubmitting(false);
     if (error) {
       setSubmitError(error.message);
@@ -188,8 +224,10 @@ export default function CrmInterventionCreate() {
           Retour
         </button>
         <div className={styles.headerSection}>
-          <h1 className={styles.title}>Créer une Intervention</h1>
-          <p className={styles.subtitle}>Planifiez une nouvelle intervention pour un technicien</p>
+          <h1 className={styles.title}>{isEdit ? 'Modifier une Intervention' : 'Créer une Intervention'}</h1>
+          <p className={styles.subtitle}>
+            {isEdit ? 'Modifiez une intervention planifiée' : 'Planifiez une nouvelle intervention pour un technicien'}
+          </p>
         </div>
         {loadError && (
           <p className={styles.errorMessage} style={{ marginBottom: 16 }}>
@@ -225,6 +263,7 @@ export default function CrmInterventionCreate() {
                   value={formData.laverieId}
                   onChange={(e) => setFormData({ ...formData, laverieId: e.target.value })}
                   className={styles.select}
+                  disabled={isEdit}
                 >
                   <option value="">-- Choisir une laverie --</option>
                   {crmLaveries.map((l) => (
@@ -232,7 +271,7 @@ export default function CrmInterventionCreate() {
                       {l.nom} - {l.ville}
                     </option>
                   ))}
-                  {boardLaverieOptions.map((emp) => (
+                  {!isEdit && boardLaverieOptions.map((emp) => (
                     <option key={`board-${emp.id}`} value={`board:${emp.id}`}>
                       {(emp.name ?? 'Sans nom').trim()} (Board)
                     </option>

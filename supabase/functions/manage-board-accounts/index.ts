@@ -6,7 +6,7 @@ const cors: Record<string, string> = {
 };
 
 type Payload = {
-  mode?: 'create' | 'update';
+  mode?: 'create' | 'update' | 'list';
   email?: string;
   password?: string;
   role?: 'patron' | 'residence';
@@ -55,6 +55,42 @@ Deno.serve(async (req) => {
 
     const body = (await req.json()) as Payload;
     const mode = body.mode ?? 'create';
+
+    if (mode === 'list') {
+      const [{ data: roles, error: rolesErr }, { data: accesses, error: accessesErr }] = await Promise.all([
+        admin.from('board_account_roles').select('user_id, role').order('updated_at', { ascending: false }),
+        admin.from('board_account_emplacements').select('user_id, emplacement_id'),
+      ]);
+      if (rolesErr) return json(500, { error: rolesErr.message });
+      if (accessesErr) return json(500, { error: accessesErr.message });
+
+      const accessMap = new Map<string, string[]>();
+      (accesses ?? []).forEach((row: { user_id: string; emplacement_id: string }) => {
+        const list = accessMap.get(row.user_id) ?? [];
+        list.push(row.emplacement_id);
+        accessMap.set(row.user_id, list);
+      });
+
+      const ids = Array.from(new Set((roles ?? []).map((r: { user_id: string }) => r.user_id)));
+      const users = await Promise.all(
+        ids.map(async (id) => {
+          const { data } = await admin.auth.admin.getUserById(id);
+          const email = data?.user?.email ?? null;
+          return [id, email] as const;
+        })
+      );
+      const emailById = new Map(users);
+
+      const managers = (roles ?? []).map((r: { user_id: string; role: 'patron' | 'residence' }) => ({
+        id: r.user_id,
+        role: r.role,
+        email: emailById.get(r.user_id) ?? null,
+        emplacement_ids: accessMap.get(r.user_id) ?? [],
+      }));
+
+      return json(200, { ok: true, managers });
+    }
+
     const role = body.role === 'residence' ? 'residence' : 'patron';
     const emplacementIds = Array.isArray(body.emplacement_ids)
       ? body.emplacement_ids.map((x) => String(x).trim()).filter(Boolean)

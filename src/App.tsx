@@ -22,6 +22,7 @@ import CrmTournee from './pages/crm/CrmTournee';
 import CrmCommande from './pages/crm/CrmCommande';
 import CrmProspection from './pages/crm/CrmProspection';
 import CrmAccesUtilisateurs from './pages/crm/CrmAccesUtilisateurs';
+import CrmUtilisateurDetail from './pages/crm/CrmUtilisateurDetail';
 import { useAuth } from './contexts/AuthContext';
 import { useBoardAccess } from './contexts/BoardAccessContext';
 import { supabase } from './supabaseClient';
@@ -31,6 +32,9 @@ function App() {
   const { loading: accessLoading, isPatron, isResidence } = useBoardAccess();
   const navigate = useNavigate();
   const [pendingRefundCount, setPendingRefundCount] = useState(0);
+  const [crmLoading, setCrmLoading] = useState(true);
+  const [crmActive, setCrmActive] = useState(false);
+  const [crmRole, setCrmRole] = useState<'patron' | 'salarie' | null>(null);
 
   const fetchPendingRefundCount = useCallback(async () => {
     if (!isPatron) {
@@ -81,7 +85,41 @@ function App() {
     return () => clearInterval(t);
   }, [user, isPatron, fetchPendingRefundCount]);
 
-  if (loading || accessLoading) {
+  useEffect(() => {
+    const loadCrmRole = async () => {
+      if (!user) {
+        setCrmActive(false);
+        setCrmRole(null);
+        setCrmLoading(false);
+        return;
+      }
+      setCrmLoading(true);
+      const { data, error } = await supabase
+        .from('crm_users')
+        .select('role, is_active')
+        .eq('id', user.id)
+        .maybeSingle();
+      if (error || !data) {
+        setCrmActive(false);
+        setCrmRole(null);
+        setCrmLoading(false);
+        return;
+      }
+      setCrmActive(Boolean(data.is_active));
+      setCrmRole((data.role as 'patron' | 'salarie') ?? null);
+      setCrmLoading(false);
+    };
+    void loadCrmRole();
+  }, [user]);
+
+  // Règle métier : un compte CRM "salarié" ne doit JAMAIS voir le board, même s'il a un rôle board.
+  const isCrmOnly = crmActive && crmRole === 'salarie';
+
+  const canUseBoard = !isCrmOnly && (isPatron || isResidence);
+  const canUseCrm = isPatron || (crmActive && (crmRole === 'patron' || crmRole === 'salarie'));
+  const canManageCrmUsers = isPatron || (crmActive && crmRole === 'patron');
+
+  if (loading || accessLoading || crmLoading) {
     return (
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '100vh', height: '100%', backgroundColor: '#F8F9FA' }}>
         <p style={{ color: '#666', fontSize: 16 }}>Chargement...</p>
@@ -125,9 +163,10 @@ function App() {
           <img src="/logo_washpro.png" alt="Wash Pro" style={{ height: 40, objectFit: 'contain', display: 'block' }} />
         </div>
         <nav style={{ display: 'flex', flexDirection: 'column', gap: 15, flex: 1 }}>
-          <MenuLink icon={<LayoutDashboard size={20}/>} label="Accueil" to="/" />
-          <MenuLink icon={<MapPin size={20}/>} label="Emplacements" to="/emplacements" />
-          {isPatron && (
+          {/* En mode CRM-only, l'accueil doit aller vers le CRM */}
+          <MenuLink icon={<LayoutDashboard size={20}/>} label="Accueil" to={isCrmOnly ? '/crm/accueil' : '/'} />
+          {canUseBoard && <MenuLink icon={<MapPin size={20}/>} label="Emplacements" to="/emplacements" />}
+          {canUseBoard && isPatron && (
             <>
               <MenuLink icon={<Receipt size={20}/>} label="Transactions" to="/transactions" />
               <MenuLink icon={<Tablet size={20}/>} label="Appareils" to="/appareils" />
@@ -137,6 +176,10 @@ function App() {
               <hr style={{ width: '100%', border: '0.5px solid #F0F0F0', margin: '10px 0' }} />
               <MenuLink icon={<Users size={20}/>} label="Utilisateurs" to="/utilisateurs" />
               <MenuLink icon={<Settings size={20}/>} label="Configuration" to="/configuration" />
+            </>
+          )}
+          {canUseCrm && (
+            <>
               <hr style={{ width: '100%', border: '0.5px solid #F0F0F0', margin: '10px 0' }} />
               <MenuLink icon={<LayoutDashboard size={20}/>} label="Accueil CRM" to="/crm/accueil" />
               <MenuLink icon={<MapPin size={20}/>} label="Laveries" to="/crm/laveries" />
@@ -144,7 +187,7 @@ function App() {
               <MenuLink icon={<Receipt size={20}/>} label="Planning tournée" to="/crm/planning-tournee" />
               <MenuLink icon={<Tablet size={20}/>} label="Commande" to="/crm/commande" />
               <MenuLink icon={<Megaphone size={20}/>} label="Prospection" to="/crm/prospection" />
-              <MenuLink icon={<Users size={20}/>} label="Utilisateurs & accès" to="/crm/utilisateurs" />
+              {canManageCrmUsers && <MenuLink icon={<Users size={20}/>} label="Utilisateurs & accès" to="/crm/utilisateurs" />}
             </>
           )}
         </nav>
@@ -182,34 +225,60 @@ function App() {
         }}
       >
         <Routes>
-          <Route path="/" element={<Accueil />} />
-          <Route path="/emplacements" element={<Emplacements />} />
-          <Route path="/emplacements/:id" element={<EmplacementDetail />} />
-          {isPatron ? (
+          {/* Mode CRM-only (salarié CRM) : pas d'accès aux pages board */}
+          {isCrmOnly ? (
             <>
-              <Route path="/appareils" element={<Appareils />} />
-              <Route path="/transactions" element={<Transactions />} />
-              <Route path="/machines/:id" element={<MachineDetail />} />
-              <Route path="/marketing" element={<Marketing />} />
-              <Route path="/missions" element={<Missions />} />
-              <Route path="/remboursements" element={<Remboursements />} />
-              <Route path="/utilisateurs" element={<Utilisateurs />} />
-              <Route path="/utilisateurs/:id" element={<ProfileDetail />} />
-              <Route path="/gerants-residences" element={<Navigate to="/crm/utilisateurs?tab=gerants" replace />} />
-              <Route path="/configuration" element={<ConfigurationPlaceholder />} />
+              <Route path="/" element={<Navigate to="/crm/accueil" replace />} />
               <Route path="/crm/accueil" element={<CrmAccueil />} />
               <Route path="/crm/laveries" element={<CrmLaveries />} />
               <Route path="/crm/laveries/:id" element={<CrmLaverieDetail />} />
               <Route path="/crm/laveries/board/:emplacementId" element={<CrmLaverieDetail />} />
               <Route path="/crm/interventions" element={<CrmInterventions />} />
               <Route path="/crm/intervention-create" element={<CrmInterventionCreate />} />
+              <Route path="/crm/interventions/:id/edit" element={<CrmInterventionCreate />} />
               <Route path="/crm/planning-tournee" element={<CrmTournee />} />
               <Route path="/crm/commande" element={<CrmCommande />} />
               <Route path="/crm/prospection" element={<CrmProspection />} />
-              <Route path="/crm/utilisateurs" element={<CrmAccesUtilisateurs />} />
+              <Route path="*" element={<Navigate to="/crm/accueil" replace />} />
             </>
-          ) : null}
-          <Route path="*" element={<Navigate to={isResidence ? '/emplacements' : '/'} replace />} />
+          ) : (
+            <>
+              <Route path="/" element={<Accueil />} />
+              <Route path="/emplacements" element={<Emplacements />} />
+              <Route path="/emplacements/:id" element={<EmplacementDetail />} />
+              {isPatron ? (
+                <>
+                  <Route path="/appareils" element={<Appareils />} />
+                  <Route path="/transactions" element={<Transactions />} />
+                  <Route path="/machines/:id" element={<MachineDetail />} />
+                  <Route path="/marketing" element={<Marketing />} />
+                  <Route path="/missions" element={<Missions />} />
+                  <Route path="/remboursements" element={<Remboursements />} />
+                  <Route path="/utilisateurs" element={<Utilisateurs />} />
+                  <Route path="/utilisateurs/:id" element={<ProfileDetail />} />
+                  <Route path="/gerants-residences" element={<Navigate to="/crm/utilisateurs?tab=gerants" replace />} />
+                  <Route path="/configuration" element={<ConfigurationPlaceholder />} />
+                </>
+              ) : null}
+              {canUseCrm ? (
+                <>
+                  <Route path="/crm/accueil" element={<CrmAccueil />} />
+                  <Route path="/crm/laveries" element={<CrmLaveries />} />
+                  <Route path="/crm/laveries/:id" element={<CrmLaverieDetail />} />
+                  <Route path="/crm/laveries/board/:emplacementId" element={<CrmLaverieDetail />} />
+                  <Route path="/crm/interventions" element={<CrmInterventions />} />
+                  <Route path="/crm/intervention-create" element={<CrmInterventionCreate />} />
+                  <Route path="/crm/interventions/:id/edit" element={<CrmInterventionCreate />} />
+                  <Route path="/crm/planning-tournee" element={<CrmTournee />} />
+                  <Route path="/crm/commande" element={<CrmCommande />} />
+                  <Route path="/crm/prospection" element={<CrmProspection />} />
+                  {canManageCrmUsers && <Route path="/crm/utilisateurs" element={<CrmAccesUtilisateurs />} />}
+                  {canManageCrmUsers && <Route path="/crm/utilisateurs/:id" element={<CrmUtilisateurDetail />} />}
+                </>
+              ) : null}
+              <Route path="*" element={<Navigate to={isResidence ? '/emplacements' : '/'} replace />} />
+            </>
+          )}
         </Routes>
       </div>
     </div>

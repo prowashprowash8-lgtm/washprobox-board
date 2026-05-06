@@ -221,6 +221,7 @@ export default function CrmTournee() {
 
       const historiquePayload: Record<string, unknown> = {
         laverie_id: selectedIntervention.laverie_id,
+        technicien_id: currentUser.id,
         technicien_nom: tech?.first_name || 'Inconnu',
         date_intervention: maintenant,
         motif: selectedIntervention.motif,
@@ -241,6 +242,7 @@ export default function CrmTournee() {
         const { error: commandeError } = await supabase.from('commandes').insert([
           {
             laverie_id: selectedIntervention.laverie_id,
+            technicien_id: currentUser.id,
             statut: 'commandé',
             date_commande: maintenant,
             articles: validPieces.map((p) => ({ nom: p.nom.trim(), quantite: p.quantite })),

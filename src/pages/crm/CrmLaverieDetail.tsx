@@ -20,6 +20,7 @@ type Laverie = {
 
 type Historique = {
   id: number;
+  technicien_id?: string | null;
   technicien_nom: string;
   date_intervention: string;
   motif: string;
@@ -97,6 +98,7 @@ export default function CrmLaverieDetail() {
       if (!targetId && emplacementId) {
         const empRes = await supabase.from('emplacements').select('id, name, address, created_at').eq('id', emplacementId).single();
         if (empRes.error || !empRes.data) {
+          setNotice(`Emplacement introuvable: ${empRes.error?.message ?? 'aucune donnée'}`);
           setLoading(false);
           return;
         }
@@ -138,6 +140,7 @@ export default function CrmLaverieDetail() {
       }
 
       if (!targetId) {
+        setNotice('Identifiant laverie manquant.');
         setLoading(false);
         return;
       }
@@ -154,16 +157,22 @@ export default function CrmLaverieDetail() {
         supabase.from('laveries').select('*').eq('id', targetId).single(),
         supabase
           .from('historique')
-          .select('id, technicien_nom, date_intervention, motif, description, compte_rendu, pieces_changees')
+          .select('id, technicien_id, technicien_nom, date_intervention, motif, description, compte_rendu, pieces_changees')
           .eq('laverie_id', targetId)
           .order('date_intervention', { ascending: false }),
       ]);
-      if (!lavRes.error) {
+      if (lavRes.error) {
+        setNotice(`Laverie introuvable: ${lavRes.error.message}`);
+      } else {
         setLaverie(lavRes.data as Laverie);
         setStorageFolderId((lavRes.data as Laverie).id);
         setNotesValue((lavRes.data as Laverie).infos_supplementaires ?? '');
       }
-      if (!histRes.error) setHistorique((histRes.data ?? []) as Historique[]);
+      if (histRes.error) {
+        setNotice((prev) => prev ?? `Historique indisponible: ${histRes.error.message}`);
+      } else {
+        setHistorique((histRes.data ?? []) as Historique[]);
+      }
       await loadPhotos(targetId);
       setLoading(false);
     };
@@ -220,7 +229,18 @@ export default function CrmLaverieDetail() {
   };
 
   if (loading) return <p style={{ color: '#666' }}>Chargement...</p>;
-  if (!laverie) return <p style={{ color: '#666' }}>Laverie introuvable.</p>;
+  if (!laverie) {
+    return (
+      <div style={{ maxWidth: 1200, margin: '0 auto' }}>
+        {notice ? (
+          <div style={{ padding: 12, marginBottom: 12, backgroundColor: '#FEE2E2', color: '#B91C1C', borderRadius: 10 }}>
+            {notice}
+          </div>
+        ) : null}
+        <p style={{ color: '#666' }}>Laverie introuvable.</p>
+      </div>
+    );
+  }
 
   return (
     <div style={{ maxWidth: 1200, margin: '0 auto' }}>
