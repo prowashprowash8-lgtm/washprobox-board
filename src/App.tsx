@@ -224,8 +224,6 @@ function App() {
               className={layoutStyles.burgerBtn}
               type="button"
               onClick={() => setDrawerOpen((v) => !v)}
-              onPointerDown={() => setDrawerOpen((v) => !v)}
-              onTouchEnd={() => setDrawerOpen((v) => !v)}
               aria-label="Ouvrir le menu"
             >
               <Menu size={20} />
