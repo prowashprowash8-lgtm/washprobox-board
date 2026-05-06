@@ -220,7 +220,14 @@ function App() {
         {/* Topbar mobile : visible uniquement via CSS (media query) */}
         <div className={layoutStyles.mobileTopbar}>
           <div className={layoutStyles.mobileTopbarLeft}>
-            <button className={layoutStyles.burgerBtn} type="button" onClick={() => setDrawerOpen(true)} aria-label="Ouvrir le menu">
+            <button
+              className={layoutStyles.burgerBtn}
+              type="button"
+              onClick={() => setDrawerOpen((v) => !v)}
+              onPointerDown={() => setDrawerOpen((v) => !v)}
+              onTouchEnd={() => setDrawerOpen((v) => !v)}
+              aria-label="Ouvrir le menu"
+            >
               <Menu size={20} />
             </button>
             <div className={layoutStyles.mobileTitleWrap}>

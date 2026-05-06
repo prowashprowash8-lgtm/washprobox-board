@@ -93,6 +93,9 @@
     border: 1px solid #eee;
     background: #fff;
     border-radius: 12px;
+    touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
+    cursor: pointer;
   }
 
   .mobileTitleWrap {
