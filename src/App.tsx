@@ -38,7 +38,6 @@ function App() {
   const [crmActive, setCrmActive] = useState(false);
   const [crmRole, setCrmRole] = useState<'patron' | 'salarie' | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [isMobile, setIsMobile] = useState(false);
 
   const fetchPendingRefundCount = useCallback(async () => {
     if (!isPatron) {
@@ -115,22 +114,6 @@ function App() {
     };
     void loadCrmRole();
   }, [user]);
-
-  useEffect(() => {
-    const mql = window.matchMedia('(max-width: 900px)');
-    const apply = () => setIsMobile(Boolean(mql.matches));
-    apply();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const onChange = (e: any) => setIsMobile(Boolean(e.matches));
-    if ('addEventListener' in mql) mql.addEventListener('change', onChange);
-    // @ts-expect-error old safari
-    else mql.addListener(onChange);
-    return () => {
-      if ('removeEventListener' in mql) mql.removeEventListener('change', onChange);
-      // @ts-expect-error old safari
-      else mql.removeListener(onChange);
-    };
-  }, []);
 
   useEffect(() => {
     // Fermer le drawer au changement de page.
@@ -233,22 +216,21 @@ function App() {
       </div>
 
       {/* CONTENU PRINCIPAL — minHeight:0 indispensable pour que overflow fonctionne en flex */}
-      <div className={layoutStyles.content} style={{ padding: isMobile ? undefined : 40 }}>
-        {isMobile ? (
-          <div className={layoutStyles.mobileTopbar}>
-            <div className={layoutStyles.mobileTopbarLeft}>
-              <button className={layoutStyles.burgerBtn} type="button" onClick={() => setDrawerOpen(true)} aria-label="Ouvrir le menu">
-                <Menu size={20} />
-              </button>
-              <div className={layoutStyles.mobileTitleWrap}>
-                <p className={layoutStyles.mobileTitle}>{mobileTitle}</p>
-                <p className={layoutStyles.mobileSubtitle}>
-                  {isCrmOnly ? 'Accès CRM' : isResidence ? 'Accès résidence' : 'Accès patron'}
-                </p>
-              </div>
+      <div className={layoutStyles.content}>
+        {/* Topbar mobile : visible uniquement via CSS (media query) */}
+        <div className={layoutStyles.mobileTopbar}>
+          <div className={layoutStyles.mobileTopbarLeft}>
+            <button className={layoutStyles.burgerBtn} type="button" onClick={() => setDrawerOpen(true)} aria-label="Ouvrir le menu">
+              <Menu size={20} />
+            </button>
+            <div className={layoutStyles.mobileTitleWrap}>
+              <p className={layoutStyles.mobileTitle}>{mobileTitle}</p>
+              <p className={layoutStyles.mobileSubtitle}>
+                {isCrmOnly ? 'Accès CRM' : isResidence ? 'Accès résidence' : 'Accès patron'}
+              </p>
             </div>
           </div>
-        ) : null}
+        </div>
         <Routes>
           {/* Mode CRM-only (salarié CRM) : pas d'accès aux pages board */}
           {isCrmOnly ? (
@@ -308,72 +290,68 @@ function App() {
       </div>
 
       {/* DRAWER MOBILE (au-dessus de tout) */}
-      {isMobile ? (
-        <>
-          {drawerOpen ? <div className={layoutStyles.drawerOverlay} onClick={() => setDrawerOpen(false)} /> : null}
-          {drawerOpen ? (
-            <aside className={layoutStyles.drawer} aria-label="Menu">
-              <div className={layoutStyles.drawerHeader}>
-                <img src="/logo_washpro.png" alt="Wash Pro" className={layoutStyles.drawerLogo} />
-                <button
-                  className={layoutStyles.drawerCloseBtn}
-                  type="button"
-                  onClick={() => setDrawerOpen(false)}
-                  aria-label="Fermer le menu"
-                >
-                  <X size={20} />
-                </button>
-              </div>
-              <nav style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-                <MenuLink icon={<LayoutDashboard size={20}/>} label="Accueil" to={isCrmOnly ? '/crm/accueil' : '/'} />
-                {canUseBoard && <MenuLink icon={<MapPin size={20}/>} label="Emplacements" to="/emplacements" />}
-                {canUseBoard && isPatron && (
-                  <>
-                    <MenuLink icon={<Receipt size={20}/>} label="Transactions" to="/transactions" />
-                    <MenuLink icon={<Tablet size={20}/>} label="Appareils" to="/appareils" />
-                    <MenuLink icon={<Megaphone size={20}/>} label="Marketing" to="/marketing" />
-                    <MenuLink icon={<Target size={20}/>} label="Missions" to="/missions" />
-                    <MenuLink icon={<RotateCcw size={20}/>} label="Remboursements" to="/remboursements" badge={pendingRefundCount} />
-                    <MenuLink icon={<Users size={20}/>} label="Utilisateurs" to="/utilisateurs" />
-                    <MenuLink icon={<Settings size={20}/>} label="Configuration" to="/configuration" />
-                  </>
-                )}
-                {canUseCrm ? (
-                  <>
-                    <hr style={{ width: '100%', border: '0.5px solid #F0F0F0', margin: '8px 0' }} />
-                    <MenuLink icon={<LayoutDashboard size={20}/>} label="Accueil CRM" to="/crm/accueil" />
-                    <MenuLink icon={<MapPin size={20}/>} label="Laveries" to="/crm/laveries" />
-                    <MenuLink icon={<Target size={20}/>} label="Interventions" to="/crm/interventions" />
-                    <MenuLink icon={<Receipt size={20}/>} label="Planning tournée" to="/crm/planning-tournee" />
-                    <MenuLink icon={<Tablet size={20}/>} label="Commande" to="/crm/commande" />
-                    <MenuLink icon={<Megaphone size={20}/>} label="Prospection" to="/crm/prospection" />
-                    {canManageCrmUsers && <MenuLink icon={<Users size={20}/>} label="Utilisateurs & accès" to="/crm/utilisateurs" />}
-                  </>
-                ) : null}
+      {drawerOpen ? <div className={layoutStyles.drawerOverlay} onClick={() => setDrawerOpen(false)} /> : null}
+      {drawerOpen ? (
+        <aside className={layoutStyles.drawer} aria-label="Menu">
+          <div className={layoutStyles.drawerHeader}>
+            <img src="/logo_washpro.png" alt="Wash Pro" className={layoutStyles.drawerLogo} />
+            <button
+              className={layoutStyles.drawerCloseBtn}
+              type="button"
+              onClick={() => setDrawerOpen(false)}
+              aria-label="Fermer le menu"
+            >
+              <X size={20} />
+            </button>
+          </div>
+          <nav style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+            <MenuLink icon={<LayoutDashboard size={20}/>} label="Accueil" to={isCrmOnly ? '/crm/accueil' : '/'} />
+            {canUseBoard && <MenuLink icon={<MapPin size={20}/>} label="Emplacements" to="/emplacements" />}
+            {canUseBoard && isPatron && (
+              <>
+                <MenuLink icon={<Receipt size={20}/>} label="Transactions" to="/transactions" />
+                <MenuLink icon={<Tablet size={20}/>} label="Appareils" to="/appareils" />
+                <MenuLink icon={<Megaphone size={20}/>} label="Marketing" to="/marketing" />
+                <MenuLink icon={<Target size={20}/>} label="Missions" to="/missions" />
+                <MenuLink icon={<RotateCcw size={20}/>} label="Remboursements" to="/remboursements" badge={pendingRefundCount} />
+                <MenuLink icon={<Users size={20}/>} label="Utilisateurs" to="/utilisateurs" />
+                <MenuLink icon={<Settings size={20}/>} label="Configuration" to="/configuration" />
+              </>
+            )}
+            {canUseCrm ? (
+              <>
                 <hr style={{ width: '100%', border: '0.5px solid #F0F0F0', margin: '8px 0' }} />
-                <button
-                  onClick={() => signOut().then(() => navigate('/'))}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 12,
-                    padding: '10px 12px',
-                    background: 'none',
-                    border: '1px solid #eee',
-                    borderRadius: 12,
-                    cursor: 'pointer',
-                    color: '#444',
-                    fontSize: 14,
-                    fontWeight: 600,
-                  }}
-                >
-                  <LogOut size={18} />
-                  Se déconnecter
-                </button>
-              </nav>
-            </aside>
-          ) : null}
-        </>
+                <MenuLink icon={<LayoutDashboard size={20}/>} label="Accueil CRM" to="/crm/accueil" />
+                <MenuLink icon={<MapPin size={20}/>} label="Laveries" to="/crm/laveries" />
+                <MenuLink icon={<Target size={20}/>} label="Interventions" to="/crm/interventions" />
+                <MenuLink icon={<Receipt size={20}/>} label="Planning tournée" to="/crm/planning-tournee" />
+                <MenuLink icon={<Tablet size={20}/>} label="Commande" to="/crm/commande" />
+                <MenuLink icon={<Megaphone size={20}/>} label="Prospection" to="/crm/prospection" />
+                {canManageCrmUsers && <MenuLink icon={<Users size={20}/>} label="Utilisateurs & accès" to="/crm/utilisateurs" />}
+              </>
+            ) : null}
+            <hr style={{ width: '100%', border: '0.5px solid #F0F0F0', margin: '8px 0' }} />
+            <button
+              onClick={() => signOut().then(() => navigate('/'))}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 12,
+                padding: '10px 12px',
+                background: 'none',
+                border: '1px solid #eee',
+                borderRadius: 12,
+                cursor: 'pointer',
+                color: '#444',
+                fontSize: 14,
+                fontWeight: 600,
+              }}
+            >
+              <LogOut size={18} />
+              Se déconnecter
+            </button>
+          </nav>
+        </aside>
       ) : null}
     </div>
   );
