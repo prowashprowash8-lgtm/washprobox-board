@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Routes, Route, NavLink, Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Receipt, MapPin, Tablet, Settings, Users, Megaphone, Target, LogOut, RotateCcw, Menu, X } from 'lucide-react';
+import { LayoutDashboard, Receipt, MapPin, Tablet, Settings, Users, Megaphone, Target, LogOut, RotateCcw, Menu, X, MessageSquare } from 'lucide-react';
 import Accueil from './pages/Accueil';
 import Appareils from './pages/Appareils';
 import Emplacements from './pages/Emplacements';
@@ -13,6 +13,7 @@ import Remboursements from './pages/Remboursements';
 import Utilisateurs from './pages/Utilisateurs';
 import ProfileDetail from './pages/ProfileDetail';
 import Login from './pages/Login';
+import MessagerieResidence from './pages/MessagerieResidence';
 import CrmAccueil from './pages/crm/CrmAccueil';
 import CrmLaveries from './pages/crm/CrmLaveries';
 import CrmLaverieDetail from './pages/crm/CrmLaverieDetail';
@@ -156,7 +157,9 @@ function App() {
                   ? 'Marketing'
                   : location.pathname.startsWith('/remboursements')
                     ? 'Remboursements'
-                    : 'Board';
+                    : location.pathname.startsWith('/messagerie')
+                      ? 'Messagerie'
+                      : 'Board';
 
   return (
     <div className={layoutStyles.appRoot}>
@@ -169,6 +172,7 @@ function App() {
           {/* En mode CRM-only, l'accueil doit aller vers le CRM */}
           <MenuLink icon={<LayoutDashboard size={20}/>} label="Accueil" to={isCrmOnly ? '/crm/accueil' : '/'} />
           {canUseBoard && <MenuLink icon={<MapPin size={20}/>} label="Emplacements" to="/emplacements" />}
+          {canUseBoard && isResidence && <MenuLink icon={<MessageSquare size={20}/>} label="Messagerie" to="/messagerie" />}
           {canUseBoard && isPatron && (
             <>
               <MenuLink icon={<Receipt size={20}/>} label="Transactions" to="/transactions" />
@@ -258,6 +262,7 @@ function App() {
               <Route path="/" element={<Accueil />} />
               <Route path="/emplacements" element={<Emplacements />} />
               <Route path="/emplacements/:id" element={<EmplacementDetail />} />
+              {isResidence && <Route path="/messagerie" element={<MessagerieResidence />} />}
               {isPatron ? (
                 <>
                   <Route path="/appareils" element={<Appareils />} />
@@ -312,6 +317,7 @@ function App() {
           <nav style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <MenuLink icon={<LayoutDashboard size={20}/>} label="Accueil" to={isCrmOnly ? '/crm/accueil' : '/'} />
             {canUseBoard && <MenuLink icon={<MapPin size={20}/>} label="Emplacements" to="/emplacements" />}
+            {canUseBoard && isResidence && <MenuLink icon={<MessageSquare size={20}/>} label="Messagerie" to="/messagerie" />}
             {canUseBoard && isPatron && (
               <>
                 <MenuLink icon={<Receipt size={20}/>} label="Transactions" to="/transactions" />
