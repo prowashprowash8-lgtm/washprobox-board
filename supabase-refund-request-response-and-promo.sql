@@ -42,6 +42,12 @@ DECLARE
   v_mt text;
   v_applies_to text;
 BEGIN
+  -- CRITIQUE #4 de l'audit : ne pas retirer cette vérification. Seul un compte board
+  -- avec le rôle 'patron' explicite dans board_account_roles peut approuver un remboursement.
+  IF NOT EXISTS (SELECT 1 FROM public.board_account_roles WHERE user_id = auth.uid() AND role = 'patron') THEN
+    RETURN json_build_object('success', false, 'error', 'forbidden');
+  END IF;
+
   IF p_statut NOT IN ('approved', 'rejected') THEN
     RETURN json_build_object('success', false, 'error', 'invalid_status');
   END IF;
@@ -111,7 +117,7 @@ END;
 $$;
 
 REVOKE ALL ON FUNCTION public.approve_or_reject_refund_request(uuid, text, text) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.approve_or_reject_refund_request(uuid, text, text) TO anon;
+REVOKE EXECUTE ON FUNCTION public.approve_or_reject_refund_request(uuid, text, text) FROM anon;
 GRANT EXECUTE ON FUNCTION public.approve_or_reject_refund_request(uuid, text, text) TO authenticated;
 
 -- ----------------------------------------------------------------
@@ -166,10 +172,12 @@ GRANT EXECUTE ON FUNCTION public.mark_refund_responses_seen(uuid) TO authenticat
 -- ----------------------------------------------------------------
 -- Transactions utilisateur : infos demande de remboursement
 -- (DROP + CREATE : PostgreSQL refuse de changer le type de retour avec CREATE OR REPLACE seul)
+-- CRITIQUE #6 de l'audit : ancienne version (1 argument) lisible par n'importe qui connaissant
+-- un UUID. Remplacée par la version à 2 arguments qui exige le session_token.
 -- ----------------------------------------------------------------
 DROP FUNCTION IF EXISTS public.get_user_transactions(uuid);
 
-CREATE OR REPLACE FUNCTION public.get_user_transactions(p_user_id uuid)
+CREATE OR REPLACE FUNCTION public.get_user_transactions(p_user_id uuid, p_session_token uuid)
 RETURNS TABLE (
   id uuid,
   amount decimal,
@@ -190,6 +198,12 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 BEGIN
+  -- "profiles p" obligatoire ici : sans alias, "id" est ambigu avec la colonne "id" que
+  -- cette fonction renvoie elle-même (RETURNS TABLE(id uuid, ...)).
+  IF NOT EXISTS (SELECT 1 FROM public.profiles p WHERE p.id = p_user_id AND p.session_token = p_session_token) THEN
+    RETURN;
+  END IF;
+
   RETURN QUERY
   SELECT
     t.id,
@@ -230,15 +244,17 @@ BEGIN
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION public.get_user_transactions(uuid) TO anon;
-GRANT EXECUTE ON FUNCTION public.get_user_transactions(uuid) TO authenticated;
+GRANT EXECUTE ON FUNCTION public.get_user_transactions(uuid, uuid) TO anon;
+GRANT EXECUTE ON FUNCTION public.get_user_transactions(uuid, uuid) TO authenticated;
 
 -- ----------------------------------------------------------------
 -- Codes promo disponibles au moment du paiement (modal app)
+-- CRITIQUE #6 de l'audit : ancienne version (1 argument) lisible par n'importe qui connaissant
+-- un UUID. Remplacée par la version à 2 arguments qui exige le session_token.
 -- ----------------------------------------------------------------
 DROP FUNCTION IF EXISTS public.get_user_available_promo_codes(uuid);
 
-CREATE OR REPLACE FUNCTION public.get_user_available_promo_codes(p_user_id uuid)
+CREATE OR REPLACE FUNCTION public.get_user_available_promo_codes(p_user_id uuid, p_session_token uuid)
 RETURNS TABLE (
   code text,
   uses_remaining integer,
@@ -250,6 +266,10 @@ STABLE
 SET search_path = public
 AS $$
 BEGIN
+  IF NOT EXISTS (SELECT 1 FROM public.profiles WHERE id = p_user_id AND session_token = p_session_token) THEN
+    RETURN;
+  END IF;
+
   RETURN QUERY
   SELECT DISTINCT ON (pc.code)
     pc.code,
@@ -266,6 +286,6 @@ BEGIN
 END;
 $$;
 
-REVOKE ALL ON FUNCTION public.get_user_available_promo_codes(uuid) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.get_user_available_promo_codes(uuid) TO anon;
-GRANT EXECUTE ON FUNCTION public.get_user_available_promo_codes(uuid) TO authenticated;
+REVOKE ALL ON FUNCTION public.get_user_available_promo_codes(uuid, uuid) FROM PUBLIC;
+GRANT EXECUTE ON FUNCTION public.get_user_available_promo_codes(uuid, uuid) TO anon;
+GRANT EXECUTE ON FUNCTION public.get_user_available_promo_codes(uuid, uuid) TO authenticated;

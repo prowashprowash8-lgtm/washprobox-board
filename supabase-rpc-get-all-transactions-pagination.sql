@@ -30,6 +30,13 @@ DECLARE
   v_limit integer;
   v_offset integer;
 BEGIN
+  -- CRITIQUE #11 de l'audit : cette fonction était accessible à anon, donc à n'importe qui
+  -- avec la seule clé publique (fuite de TOUTES les transactions + noms/emails clients).
+  -- Exige une vraie session Supabase Auth (le board uniquement ; l'app mobile n'en a pas).
+  IF auth.uid() IS NULL THEN
+    RAISE EXCEPTION 'forbidden';
+  END IF;
+
   v_offset := GREATEST(COALESCE(p_offset, 0), 0);
   v_limit := LEAST(GREATEST(COALESCE(p_limit, 1000), 1), 5000);
 
@@ -61,6 +68,7 @@ BEGIN
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION public.get_all_transactions(integer, integer) TO anon;
+REVOKE ALL ON FUNCTION public.get_all_transactions(integer, integer) FROM PUBLIC;
+REVOKE EXECUTE ON FUNCTION public.get_all_transactions(integer, integer) FROM anon;
 GRANT EXECUTE ON FUNCTION public.get_all_transactions(integer, integer) TO authenticated;
 GRANT EXECUTE ON FUNCTION public.get_all_transactions(integer, integer) TO service_role;

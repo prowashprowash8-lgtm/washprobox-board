@@ -6,6 +6,9 @@
 
 ALTER TABLE public.promo_codes ADD COLUMN IF NOT EXISTS applies_to text DEFAULT 'both';
 
+-- NE PAS REJOUER la définition de approve_or_reject_refund_request ci-dessous : la version
+-- à jour (avec vérification du rôle patron, CRITIQUE #4 de l'audit) vit désormais dans
+-- supabase-refund-request-response-and-promo.sql. La rejouer ici rouvrirait l'accès à anon.
 CREATE OR REPLACE FUNCTION public.approve_or_reject_refund_request(
   p_request_id uuid,
   p_statut text,
@@ -97,37 +100,6 @@ REVOKE ALL ON FUNCTION public.approve_or_reject_refund_request(uuid, text, text)
 GRANT EXECUTE ON FUNCTION public.approve_or_reject_refund_request(uuid, text, text) TO anon;
 GRANT EXECUTE ON FUNCTION public.approve_or_reject_refund_request(uuid, text, text) TO authenticated;
 
--- Liste des codes : inclure le type pour l’UI
-DROP FUNCTION IF EXISTS public.get_user_available_promo_codes(uuid);
-
-CREATE OR REPLACE FUNCTION public.get_user_available_promo_codes(p_user_id uuid)
-RETURNS TABLE (
-  code text,
-  uses_remaining integer,
-  applies_to text
-)
-LANGUAGE plpgsql
-SECURITY DEFINER
-STABLE
-SET search_path = public
-AS $$
-BEGIN
-  RETURN QUERY
-  SELECT DISTINCT ON (pc.code)
-    pc.code,
-    COALESCE(pc.uses_remaining, 0)::integer,
-    lower(trim(coalesce(pc.applies_to, 'both')))
-  FROM public.refund_requests rr
-  INNER JOIN public.promo_codes pc
-    ON upper(trim(pc.code)) = upper(trim(rr.compensation_promo_code))
-  WHERE rr.user_id = p_user_id
-    AND rr.statut = 'approved'
-    AND rr.compensation_promo_code IS NOT NULL
-    AND COALESCE(pc.uses_remaining, 0) > 0
-  ORDER BY pc.code;
-END;
-$$;
-
-REVOKE ALL ON FUNCTION public.get_user_available_promo_codes(uuid) FROM PUBLIC;
-GRANT EXECUTE ON FUNCTION public.get_user_available_promo_codes(uuid) TO anon;
-GRANT EXECUTE ON FUNCTION public.get_user_available_promo_codes(uuid) TO authenticated;
+-- NE PAS REJOUER la définition de get_user_available_promo_codes ci-dessous (1 argument,
+-- sans session_token) : CRITIQUE #6 de l'audit. La version à jour (2 arguments) vit
+-- désormais dans supabase-refund-request-response-and-promo.sql.
