@@ -74,6 +74,24 @@ export default function CrmUtilisateurs({ embedded = false }: CrmUtilisateursPro
     await load();
   };
 
+  const deleteUser = async (id: string, email: string | null) => {
+    if (!window.confirm(`Supprimer définitivement le compte ${email ?? id} ? Cette personne ne pourra plus se connecter du tout.`)) {
+      return;
+    }
+    setSaving(true);
+    const { data, error: invokeErr } = await supabase.functions.invoke('manage-crm-users', {
+      body: { mode: 'delete', user_id: id },
+    });
+    if (invokeErr || data?.error) {
+      setNotice(String(data?.error ?? invokeErr?.message ?? 'Suppression impossible.'));
+      setSaving(false);
+      return;
+    }
+    setNotice('Compte supprimé.');
+    await load();
+    setSaving(false);
+  };
+
   return (
     <div className={embedded ? styles.embeddedRoot : styles.container}>
       <div className={embedded ? styles.embeddedWrapper : styles.wrapper}>
@@ -117,7 +135,7 @@ export default function CrmUtilisateurs({ embedded = false }: CrmUtilisateursPro
           <p>Chargement...</p>
         ) : (
           <table className={styles.table}>
-            <thead><tr><th>Email</th><th>Prénom</th><th>Rôle</th><th>Actif</th></tr></thead>
+            <thead><tr><th>Email</th><th>Prénom</th><th>Rôle</th><th>Actif</th><th></th></tr></thead>
             <tbody>
               {rows.map((row) => (
                 <tr
@@ -147,6 +165,16 @@ export default function CrmUtilisateurs({ embedded = false }: CrmUtilisateursPro
                   </td>
                   <td onClick={(e) => e.stopPropagation()}>
                     <input type="checkbox" checked={row.is_active} onChange={(e) => void patchUser(row.id, { is_active: e.target.checked })} />
+                  </td>
+                  <td onClick={(e) => e.stopPropagation()}>
+                    <button
+                      type="button"
+                      className={styles.deleteBtn}
+                      onClick={() => void deleteUser(row.id, row.email)}
+                      disabled={saving}
+                    >
+                      Supprimer
+                    </button>
                   </td>
                 </tr>
               ))}

@@ -8,12 +8,13 @@ const cors: Record<string, string> = {
 type Role = 'patron' | 'salarie';
 
 type Payload = {
-  mode?: 'create';
+  mode?: 'create' | 'delete';
   email?: string;
   password?: string;
   first_name?: string | null;
   role?: Role;
   is_active?: boolean;
+  user_id?: string;
 };
 
 Deno.serve(async (req) => {
@@ -58,7 +59,21 @@ Deno.serve(async (req) => {
 
     const body = (await req.json()) as Payload;
     const mode = body.mode ?? 'create';
-    if (mode !== 'create') return json(400, { error: 'invalid_mode' });
+    if (mode !== 'create' && mode !== 'delete') return json(400, { error: 'invalid_mode' });
+
+    if (mode === 'delete') {
+      const targetUserId = String(body.user_id ?? '').trim();
+      if (!targetUserId) return json(400, { error: 'user_id_required' });
+      if (targetUserId === userData.user.id) return json(400, { error: 'cannot_delete_self' });
+
+      const { error: deleteRowErr } = await admin.from('crm_users').delete().eq('id', targetUserId);
+      if (deleteRowErr) return json(500, { error: deleteRowErr.message });
+
+      const { error: deleteAuthErr } = await admin.auth.admin.deleteUser(targetUserId);
+      if (deleteAuthErr) return json(500, { error: deleteAuthErr.message });
+
+      return json(200, { ok: true });
+    }
 
     const email = String(body.email ?? '').trim().toLowerCase();
     const password = String(body.password ?? '');

@@ -213,6 +213,32 @@ export default function GerantsResidences({ embedded = false }: GerantsResidence
     }
   };
 
+  const handleDelete = async (manager: ManagerRow) => {
+    if (!window.confirm(`Supprimer définitivement le compte ${manager.email} ? Cette personne ne pourra plus se connecter du tout.`)) {
+      return;
+    }
+    setSaving(true);
+    setError(null);
+    setSuccess(null);
+    try {
+      const { data, error: invokeErr } = await supabase.functions.invoke('manage-board-accounts', {
+        body: { mode: 'delete', user_id: manager.id },
+      });
+      if (invokeErr) {
+        throw new Error(await resolveFunctionErrorMessage(invokeErr, 'Suppression impossible'));
+      }
+      if (data?.error) throw new Error(String(data.error));
+
+      setSuccess('Compte supprimé.');
+      await fetchData();
+    } catch (err) {
+      const message = await resolveFunctionErrorMessage(err, 'Suppression impossible');
+      setError(message || 'Suppression impossible');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!editing) return;
@@ -319,13 +345,21 @@ export default function GerantsResidences({ embedded = false }: GerantsResidence
                         : 'Aucune laverie attribuée'
                       : 'Toutes les laveries'}
                   </td>
-                  <td style={{ padding: '14px 20px', textAlign: 'right' }}>
+                  <td style={{ padding: '14px 20px', textAlign: 'right', display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
                     <button
                       type="button"
                       onClick={() => openEdit(manager)}
                       style={{ padding: '10px 14px', backgroundColor: '#F5F5F5', color: '#444', border: 'none', borderRadius: 10, fontWeight: '600', cursor: 'pointer' }}
                     >
                       Régler l’accès
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => void handleDelete(manager)}
+                      disabled={saving}
+                      style={{ padding: '10px 14px', backgroundColor: '#FEE2E2', color: '#B91C1C', border: 'none', borderRadius: 10, fontWeight: '600', cursor: saving ? 'wait' : 'pointer' }}
+                    >
+                      Supprimer
                     </button>
                   </td>
                 </tr>

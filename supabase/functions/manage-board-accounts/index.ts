@@ -6,7 +6,7 @@ const cors: Record<string, string> = {
 };
 
 type Payload = {
-  mode?: 'create' | 'update' | 'list';
+  mode?: 'create' | 'update' | 'list' | 'delete';
   email?: string;
   password?: string;
   role?: 'patron' | 'residence';
@@ -89,6 +89,29 @@ Deno.serve(async (req) => {
       }));
 
       return json(200, { ok: true, managers });
+    }
+
+    if (mode === 'delete') {
+      const targetUserId = String(body.user_id ?? '').trim();
+      if (!targetUserId) return json(400, { error: 'user_id_required' });
+      if (targetUserId === userData.user.id) return json(400, { error: 'cannot_delete_self' });
+
+      const { error: deleteAccessErr } = await admin
+        .from('board_account_emplacements')
+        .delete()
+        .eq('user_id', targetUserId);
+      if (deleteAccessErr) return json(500, { error: deleteAccessErr.message });
+
+      const { error: deleteRoleErr } = await admin
+        .from('board_account_roles')
+        .delete()
+        .eq('user_id', targetUserId);
+      if (deleteRoleErr) return json(500, { error: deleteRoleErr.message });
+
+      const { error: deleteAuthErr } = await admin.auth.admin.deleteUser(targetUserId);
+      if (deleteAuthErr) return json(500, { error: deleteAuthErr.message });
+
+      return json(200, { ok: true });
     }
 
     const role = body.role === 'residence' ? 'residence' : 'patron';

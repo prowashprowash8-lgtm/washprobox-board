@@ -13,18 +13,24 @@ interface BoardAccessContextType {
   canAccessEmplacement: (emplacementId?: string | null) => boolean;
 }
 
+// CRITIQUE #12 de l'audit : le comportement par défaut doit toujours être le plus
+// restrictif (fail-closed), jamais le plus permissif. Un compte sans ligne explicite dans
+// board_account_roles (ou en cas d'erreur réseau) est traité comme "residence" sans aucun
+// emplacement autorisé — c'est-à-dire sans accès à rien de spécifique — plutôt que "patron"
+// (accès total). Tous les comptes de confiance actuels (patron + les 4 comptes résidence)
+// ont déjà une ligne explicite en base, donc ce changement ne bloque personne d'existant.
 const BoardAccessContext = createContext<BoardAccessContextType>({
-  role: 'patron',
+  role: 'residence',
   loading: true,
   allowedEmplacementIds: [],
-  isPatron: true,
-  isResidence: false,
-  canAccessEmplacement: () => true,
+  isPatron: false,
+  isResidence: true,
+  canAccessEmplacement: () => false,
 });
 
 export function BoardAccessProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
-  const [role, setRole] = useState<BoardRole>('patron');
+  const [role, setRole] = useState<BoardRole>('residence');
   const [allowedEmplacementIds, setAllowedEmplacementIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -34,7 +40,7 @@ export function BoardAccessProvider({ children }: { children: React.ReactNode })
     const loadAccess = async () => {
       if (!user) {
         if (!cancelled) {
-          setRole('patron');
+          setRole('residence');
           setAllowedEmplacementIds([]);
           setLoading(false);
         }
@@ -50,7 +56,7 @@ export function BoardAccessProvider({ children }: { children: React.ReactNode })
           .maybeSingle();
 
         const resolvedRole: BoardRole =
-          roleRow?.role === 'residence' ? 'residence' : 'patron';
+          roleRow?.role === 'patron' ? 'patron' : 'residence';
 
         if (!cancelled) {
           setRole(resolvedRole);
@@ -74,9 +80,9 @@ export function BoardAccessProvider({ children }: { children: React.ReactNode })
         }
       } catch {
         if (!cancelled) {
-          // Fallback volontaire : ne pas verrouiller les comptes existants si la table n'est
-          // pas encore créée. Une ligne board_account_roles en "residence" activera la restriction.
-          setRole('patron');
+          // Fail-closed : en cas d'erreur (réseau, table absente...), ne jamais accorder
+          // l'accès patron par défaut.
+          setRole('residence');
           setAllowedEmplacementIds([]);
         }
       } finally {
