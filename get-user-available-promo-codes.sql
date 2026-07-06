@@ -1,3 +1,7 @@
+-- FICHIER HISTORIQUE, NE PLUS REJOUER. Signature obsolète (1 argument, sans vérification
+-- d'identité) — remplacée par get_user_available_promo_codes() (auth.uid()), voir
+-- washproapp/supabase/refund-request-response-and-promo.sql.
+--
 -- Codes promo compensation encore utilisables + type (lavage | sechage | both)
 -- Si changement de signature : DROP obligatoire.
 -- Exécuter dans Supabase → SQL Editor

@@ -1,3 +1,8 @@
+-- FICHIER HISTORIQUE, NE PLUS REJOUER. Signature obsolète (1 argument, sans vérification
+-- d'identité) — remplacée par get_user_transactions() (app, auth.uid()) et
+-- get_user_transactions(p_user_id uuid) (board patron), voir
+-- washproapp/supabase/refund-request-response-and-promo.sql et get-user-lookups-board.sql.
+--
 -- Mes transactions : savoir si le code compensation est déjà consommé (uses_remaining = 0)
 -- → affichage rouge dans l’app.
 -- Exécuter dans Supabase → SQL Editor (une fois)
