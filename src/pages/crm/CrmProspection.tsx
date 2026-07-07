@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { supabase } from '../../supabaseClient';
+import styles from './prospection.module.css';
 
 type ProspectState = 'a-prospecter' | 'en-cours-attente' | 'a-recontacter' | 'thierry';
 type Prospect = {
@@ -47,23 +48,23 @@ export default function CrmProspection() {
 
   return (
     <div>
-      <h1 style={{ fontSize: 28, fontWeight: 700, margin: '0 0 16px' }}>Prospection CRM</h1>
+      <h1 className={styles.title}>Prospection CRM</h1>
       <input
         value={query}
         onChange={(e) => setQuery(e.target.value)}
         placeholder="Rechercher un prospect..."
-        style={{ width: '100%', maxWidth: 420, marginBottom: 16, border: '1px solid #DDD', borderRadius: 8, padding: '10px 12px' }}
+        className={styles.search}
       />
       {loading ? (
         <p style={{ color: '#666' }}>Chargement...</p>
       ) : (
         <div style={{ display: 'grid', gap: 10 }}>
           {filteredRows.map((row) => (
-            <div key={row.id} style={{ background: '#fff', border: '1px solid #EEE', borderRadius: 10, padding: 12 }}>
+            <div key={row.id} className={styles.card}>
               <p style={{ margin: 0, fontWeight: 700 }}>{row.titre}</p>
               <p style={{ margin: '6px 0', color: '#666' }}>{row.adresse}</p>
               <p style={{ margin: '0 0 8px', color: '#444' }}>{row.notes ?? 'Sans notes'}</p>
-              <div style={{ display: 'flex', gap: 8 }}>
+              <div className={styles.actions}>
                 <select value={row.etat} onChange={(e) => void updateEtat(row.id, e.target.value as ProspectState)}>
                   <option value="a-prospecter">A prospecter</option>
                   <option value="en-cours-attente">En cours / Attente</option>

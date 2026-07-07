@@ -8,6 +8,12 @@
   margin: 0 auto;
 }
 
+.title {
+  font-size: 28px;
+  font-weight: 700;
+  margin: 0 0 16px;
+}
+
 .header {
   display: flex;
   gap: 12px;
@@ -63,4 +69,11 @@
 
 .card:hover {
   border-color: #1c69d3;
+}
+
+@media (max-width: 640px) {
+  .title { font-size: 20px; margin-bottom: 12px; }
+  .header { margin-bottom: 12px; }
+  .btnImport { width: 100%; padding: 12px 14px; }
+  .searchInput { max-width: none; }
 }

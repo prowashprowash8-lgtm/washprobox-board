@@ -1,0 +1,35 @@
+.title {
+  font-size: 28px;
+  font-weight: 700;
+  margin: 0 0 16px;
+}
+
+.search {
+  width: 100%;
+  max-width: 420px;
+  margin-bottom: 16px;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 10px 12px;
+  box-sizing: border-box;
+}
+
+.card {
+  background: #fff;
+  border: 1px solid #eee;
+  border-radius: 10px;
+  padding: 12px;
+}
+
+.actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+@media (max-width: 640px) {
+  .title { font-size: 20px; margin-bottom: 12px; }
+  .search { max-width: none; }
+  .actions { flex-direction: column; }
+  .actions select, .actions button { width: 100%; min-height: 40px; }
+}

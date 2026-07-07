@@ -112,7 +112,7 @@ export default function CrmLaveries() {
   return (
     <div className={styles.container}>
       <div className={styles.wrapper}>
-      <h1 style={{ fontSize: 28, fontWeight: 700, margin: '0 0 16px' }}>Laveries CRM</h1>
+      <h1 className={styles.title}>Laveries CRM</h1>
       <div className={styles.header}>
         <input
           value={query}
