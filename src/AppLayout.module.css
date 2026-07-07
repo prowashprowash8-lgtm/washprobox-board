@@ -49,6 +49,9 @@
     flex-direction: column;
     /* iOS Safari: éviter le scroll dans un div (bugs fixed/click) */
     overflow: auto;
+    /* Sans ça, .appRoot devient le conteneur de défilement mais sans inertie
+       (défilement saccadé, impression de "coincé" en fin de page sur iPhone). */
+    -webkit-overflow-scrolling: touch;
   }
 
   .sidebar {
