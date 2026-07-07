@@ -312,6 +312,7 @@ export default function ProfileDetail() {
         {activityRows.length === 0 ? (
           <p style={{ padding: 40, color: '#666' }}>Aucune activité pour cet utilisateur.</p>
         ) : (
+          <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ backgroundColor: '#F8F9FA', borderBottom: '1px solid #EEE' }}>
@@ -430,6 +431,7 @@ export default function ProfileDetail() {
               )}
             </tbody>
           </table>
+          </div>
         )}
       </div>
     </div>

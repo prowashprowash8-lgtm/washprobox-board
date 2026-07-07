@@ -231,6 +231,7 @@ export default function Transactions() {
             <p style={{ margin: 0, fontSize: 16 }}>Aucune transaction pour le moment.</p>
           </div>
         ) : (
+          <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ backgroundColor: '#F8F9FA', borderBottom: '1px solid #EEE' }}>
@@ -303,6 +304,7 @@ export default function Transactions() {
               })}
             </tbody>
           </table>
+          </div>
         )}
       </div>
     </div>

@@ -365,6 +365,7 @@ export default function Emplacements() {
       )}
 
       <div style={{ backgroundColor: '#FFF', borderRadius: 16, border: '1px solid #EEE', overflow: 'hidden' }}>
+        <div style={{ overflowX: 'auto' }}>
         <table style={{ width: '100%', borderCollapse: 'collapse' }}>
           <thead>
             <tr style={{ backgroundColor: '#F8F9FA', borderBottom: '1px solid #EEE' }}>
@@ -410,6 +411,7 @@ export default function Emplacements() {
             )}
           </tbody>
         </table>
+        </div>
       </div>
     </div>
   );

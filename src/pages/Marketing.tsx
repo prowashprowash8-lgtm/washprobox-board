@@ -187,6 +187,7 @@ export default function Marketing() {
         ) : codes.length === 0 ? (
           <p style={{ padding: 24, color: '#666' }}>Aucun code promo. Créez-en un ci-dessus.</p>
         ) : (
+          <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ backgroundColor: '#F8F9FA', borderBottom: '1px solid #EEE' }}>
@@ -227,6 +228,7 @@ export default function Marketing() {
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </div>
     </div>

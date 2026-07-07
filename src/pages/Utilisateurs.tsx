@@ -76,6 +76,7 @@ export default function Utilisateurs() {
         {profiles.length === 0 ? (
           <p style={{ padding: 32, color: '#666' }}>Aucun utilisateur.</p>
         ) : (
+          <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
             <thead>
               <tr style={{ backgroundColor: '#F8F9FA', borderBottom: '1px solid #EEE' }}>
@@ -100,6 +101,7 @@ export default function Utilisateurs() {
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </div>
     </div>
