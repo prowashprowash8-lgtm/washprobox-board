@@ -32,6 +32,16 @@ interface Machine {
   type?: string | null;
 }
 
+interface TransactionRow {
+  id: string;
+  created_at: string;
+  amount: number | null;
+  payment_method: string | null;
+  status: string | null;
+  machine_id: string | null;
+  user_nom: string | null;
+}
+
 interface HistoriqueRow {
   id: string;
   date_intervention: string;
@@ -91,6 +101,8 @@ export default function EmplacementDetail() {
   const [historiqueLoading, setHistoriqueLoading] = useState(false);
   const [historiqueError, setHistoriqueError] = useState<string | null>(null);
   const [crmLaverieIdForLink, setCrmLaverieIdForLink] = useState<string | null>(null);
+  const [transactionRows, setTransactionRows] = useState<TransactionRow[]>([]);
+  const [transactionsLoading, setTransactionsLoading] = useState(false);
 
   const fetchData = async () => {
     if (!id) return;
@@ -252,6 +264,54 @@ export default function EmplacementDetail() {
     }
     refreshRevenue(true);
   }, [id, periode, machines, loading, refreshRevenue]);
+
+  const refreshTransactions = useCallback(async () => {
+    if (machines.length === 0) {
+      setTransactionRows([]);
+      return;
+    }
+    setTransactionsLoading(true);
+    const machineIds = machines.map((m) => m.id);
+    const { data, error } = await supabase
+      .from('transactions')
+      .select('id, created_at, amount, payment_method, status, machine_id, profiles(first_name, last_name)')
+      .in('machine_id', machineIds)
+      .order('created_at', { ascending: false })
+      .limit(200);
+    if (!error) {
+      setTransactionRows(
+        (data ?? []).map((t) => {
+          const profile = (t as unknown as { profiles?: { first_name?: string; last_name?: string } | null }).profiles;
+          return {
+            id: String((t as { id: string }).id),
+            created_at: String((t as { created_at: string }).created_at),
+            amount: (t as { amount?: number }).amount ?? null,
+            payment_method: (t as { payment_method?: string }).payment_method ?? null,
+            status: (t as { status?: string }).status ?? null,
+            machine_id: (t as { machine_id?: string }).machine_id ?? null,
+            user_nom: [profile?.first_name, profile?.last_name].filter(Boolean).join(' ') || null,
+          };
+        })
+      );
+    }
+    setTransactionsLoading(false);
+  }, [machines]);
+
+  useEffect(() => {
+    if (!id || loading) return;
+    refreshTransactions();
+  }, [id, loading, refreshTransactions]);
+
+  useEffect(() => {
+    if (!id || loading || machines.length === 0) return;
+    const channel = supabase
+      .channel(`emplacement-${id}-transactions-list`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'transactions' }, () => refreshTransactions())
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [id, loading, machines.length, refreshTransactions]);
 
   useEffect(() => {
     if (!id || loading || machines.length === 0) return;
@@ -579,6 +639,42 @@ export default function EmplacementDetail() {
                 ) : null}
               </div>
             ))}
+          </div>
+        )}
+      </div>
+
+      <div style={{ marginBottom: 32, padding: 24, backgroundColor: '#FFF', borderRadius: 16, border: '1px solid #EEE', boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
+        <h3 style={{ fontSize: 17, fontWeight: '600', color: '#000', margin: '0 0 8px' }}>Historique des transactions</h3>
+        {transactionsLoading ? (
+          <p style={{ color: '#666', padding: 16 }}>Chargement...</p>
+        ) : transactionRows.length === 0 ? (
+          <p style={{ color: '#666', padding: 16 }}>Aucune transaction pour cette laverie.</p>
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+              <thead>
+                <tr style={{ textAlign: 'left', color: '#666', borderBottom: '1px solid #eee' }}>
+                  <th style={{ padding: '6px 8px' }}>Date</th>
+                  <th style={{ padding: '6px 8px' }}>Machine</th>
+                  <th style={{ padding: '6px 8px' }}>Client</th>
+                  <th style={{ padding: '6px 8px' }}>Montant</th>
+                  <th style={{ padding: '6px 8px' }}>Paiement</th>
+                  <th style={{ padding: '6px 8px' }}>Statut</th>
+                </tr>
+              </thead>
+              <tbody>
+                {transactionRows.map((t) => (
+                  <tr key={t.id} style={{ borderBottom: '1px solid #f5f5f5' }}>
+                    <td style={{ padding: '6px 8px' }}>{formatDateTimeFr(t.created_at)}</td>
+                    <td style={{ padding: '6px 8px' }}>{machines.find((m) => m.id === t.machine_id)?.nom || '—'}</td>
+                    <td style={{ padding: '6px 8px' }}>{t.user_nom || '—'}</td>
+                    <td style={{ padding: '6px 8px' }}>{t.amount != null ? `${Number(t.amount).toFixed(2)} €` : '—'}</td>
+                    <td style={{ padding: '6px 8px' }}>{t.payment_method || '—'}</td>
+                    <td style={{ padding: '6px 8px' }}>{t.status || '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         )}
       </div>
