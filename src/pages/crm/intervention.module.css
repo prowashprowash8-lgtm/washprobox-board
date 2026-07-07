@@ -31,3 +31,19 @@
 .loading { text-align: center; padding: 4rem 2rem; color: #1f2937; font-size: 1.2rem; }
 .spinner { width: 40px; height: 40px; border: 4px solid rgba(31, 41, 55, 0.15); border-top-color: #1f2937; border-radius: 50%; animation: spin 0.8s linear infinite; margin: 0 auto 1rem; }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* --- iPhone / petit écran : version compacte --- */
+@media (max-width: 640px) {
+  .container { padding: 12px; }
+  .btnBack { padding: 0.7rem 1.2rem; font-size: 0.9rem; }
+  .headerSection { margin-bottom: 1.25rem; }
+  .title { font-size: 1.4rem; }
+  .subtitle { font-size: 0.95rem; margin-top: 0.5rem; }
+  .contentGrid { grid-template-columns: 1fr; gap: 1.25rem; }
+  .form { padding: 1.25rem; border-radius: 14px; }
+  .formSection { margin-bottom: 1.5rem; }
+  .sectionTitle { font-size: 1.02rem; margin-bottom: 1rem; }
+  .radioOption { padding: 1rem; }
+  .formActions { flex-direction: column; margin-top: 1.5rem; padding-top: 1.25rem; }
+  .summaryCard { padding: 1.25rem; position: static; }
+}

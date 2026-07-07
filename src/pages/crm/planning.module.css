@@ -82,3 +82,39 @@
 .emptyState { text-align: center; padding: 3.5rem 2rem; background: linear-gradient(135deg, #f9fafb 0%, #f3f4f6 100%); border-radius: 12px; margin-top: 1.5rem; border: 1px dashed #d1d5db; }
 .emptyText { font-size: 1.25rem; font-weight: 700; color: #4b5563; margin-bottom: 1rem; }
 .btnEmptyAction { background: #667eea; color: white; border: none; padding: 0.85rem 1.75rem; border-radius: 10px; font-size: 1rem; cursor: pointer; transition: all 0.3s ease; font-weight: 600; }
+
+/* --- iPhone / petit écran : version compacte --- */
+@media (max-width: 640px) {
+  .container { padding: 12px; }
+  .techniciensSection { margin-bottom: 1.5rem; }
+  .sectionHeader { margin-bottom: 0.75rem; }
+  .sectionHeader h2 { font-size: 1.15rem; }
+  .techList { grid-template-columns: 1fr; gap: 0.6rem; }
+  .techCard { padding: 0.9rem 1rem; }
+  .techName { font-size: 0.95rem; }
+  .techCount { font-size: 0.75rem; padding: 0.25rem 0.6rem; }
+
+  .interventionsSection { padding: 14px; border-radius: 12px; }
+  .interventionHeader { margin-bottom: 1.25rem; }
+  .interventionHeader h2 { font-size: 1.1rem; }
+  .btnNewIntervention { width: 100%; padding: 0.9rem 1rem; min-height: 44px; }
+
+  .calendar { padding: 10px; margin-top: 1.25rem; border-radius: 12px; }
+  .calendarHeader { margin-bottom: 1rem; }
+  .calendarTitle { font-size: 0.95rem; text-align: center; width: 100%; order: -1; }
+  .calendarNavBtn { width: 36px; height: 36px; }
+  .calendarWeekdays { gap: 3px; margin-bottom: 0.5rem; }
+  .calendarWeekday { padding: 0.3rem 0.1rem; font-size: 0.65rem; }
+  .calendarGrid { gap: 3px; }
+  .calendarDay { padding: 0.3rem 0.2rem; min-height: 56px; border-radius: 6px; }
+  .calendarDayNumber { font-size: 0.75rem; margin-bottom: 0.2rem; }
+  .calendarIntervention { font-size: 0.55rem; padding: 0.15rem 0.25rem; }
+
+  .interventionsHeader { margin: 1.5rem 0 1rem 0; font-size: 1.05rem; }
+  .interventionsList { gap: 0.85rem; }
+  .interventionCard { padding: 1rem; border-radius: 10px; }
+  .interventionTop { margin-bottom: 0.9rem; }
+  .interventionLaverie { font-size: 1.02rem; }
+  .interventionDetails { gap: 0.6rem; }
+  .interventionDescription { font-size: 0.9rem; padding: 0.6rem 0.8rem; }
+}

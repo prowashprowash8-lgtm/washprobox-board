@@ -53,3 +53,10 @@
 .panel {
   min-height: 200px;
 }
+
+@media (max-width: 640px) {
+  .pageTitle { font-size: 20px; }
+  .pageSubtitle { font-size: 13px; margin-bottom: 14px; }
+  .tabs { gap: 4px; margin-bottom: 16px; }
+  .tab { padding: 10px 12px; font-size: 13px; }
+}

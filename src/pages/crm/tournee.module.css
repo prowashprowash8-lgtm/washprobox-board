@@ -261,3 +261,29 @@
   .pieceInput { flex: 1 1 100%; min-width: 200px; }
   .photoGrid { grid-template-columns: repeat(2, 1fr); }
 }
+
+/* --- iPhone / petit écran : version compacte de la page --- */
+@media (max-width: 640px) {
+  .container { padding: 12px; }
+  .techniciensSection { margin-bottom: 1.5rem; }
+  .sectionHeader { margin-bottom: 0.75rem; }
+  .sectionHeader h2, .sectionHeaderr h2 { font-size: 1.15rem; }
+  .sectionHeaderr h2 { padding-bottom: 0.6rem; }
+  .techList { grid-template-columns: 1fr; gap: 0.6rem; }
+  .techCard { padding: 0.9rem 1rem; }
+  .techName { font-size: 0.95rem; }
+  .techCount { font-size: 0.75rem; padding: 0.25rem 0.6rem; }
+
+  .interventionsSection { padding: 14px; border-radius: 12px; }
+  .interventionsList { gap: 0.85rem; }
+  .interventionCard { padding: 1rem; border-radius: 10px; }
+  .interventionTop { margin-bottom: 0.9rem; }
+  .interventionLaverie { font-size: 1.02rem; }
+  .interventionDetails { gap: 0.6rem; margin-bottom: 1rem; }
+  .interventionDescription { font-size: 0.9rem; padding: 0.6rem 0.8rem; }
+
+  .modalHeader { padding: 1.1rem; }
+  .modalHeader h2 { font-size: 1.1rem; }
+  .modalBody { padding: 1.1rem; gap: 1.25rem; }
+  .modalFooter { padding: 1rem; }
+}

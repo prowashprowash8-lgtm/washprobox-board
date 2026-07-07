@@ -7,6 +7,7 @@ import markerIcon from 'leaflet/dist/images/marker-icon.png';
 import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png';
 import markerShadow from 'leaflet/dist/images/marker-shadow.png';
 import { supabase } from '../../supabaseClient';
+import styles from './accueil.module.css';
 
 // Sans ça, Vite ne trouve pas les images d'icône par défaut de Leaflet (marqueurs invisibles).
 L.Icon.Default.mergeOptions({
@@ -59,7 +60,7 @@ export default function CrmAccueil() {
 
   return (
     <div>
-      <h1 style={{ fontSize: 28, fontWeight: 700, margin: '0 0 20px' }}>Accueil CRM</h1>
+      <h1 className={styles.title}>Accueil CRM</h1>
       {loading ? (
         <p style={{ color: '#666' }}>Chargement...</p>
       ) : (
@@ -73,8 +74,8 @@ export default function CrmAccueil() {
             ))}
           </div>
 
-          <h2 style={{ fontSize: 18, fontWeight: 600, margin: '28px 0 12px' }}>Carte des laveries</h2>
-          <div style={{ border: '1px solid #EEE', borderRadius: 12, overflow: 'hidden', height: 480 }}>
+          <h2 className={styles.mapTitle}>Carte des laveries</h2>
+          <div className={styles.mapWrap}>
             <MapContainer center={FRANCE_CENTER} zoom={6} style={{ height: '100%', width: '100%' }}>
               <TileLayer
                 attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
