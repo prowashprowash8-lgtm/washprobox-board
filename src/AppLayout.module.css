@@ -87,6 +87,14 @@
     min-width: 0;
   }
 
+  .mobileLogo {
+    height: 28px;
+    width: auto;
+    object-fit: contain;
+    display: block;
+    flex-shrink: 0;
+  }
+
   .burgerBtn {
     height: 40px;
     width: 40px;

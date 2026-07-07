@@ -224,6 +224,7 @@ function App() {
         {/* Topbar mobile : visible uniquement via CSS (media query) */}
         <div className={layoutStyles.mobileTopbar}>
           <div className={layoutStyles.mobileTopbarLeft}>
+            <img src="/logo_washpro.png" alt="Wash Pro" className={layoutStyles.mobileLogo} />
             <button
               className={layoutStyles.burgerBtn}
               type="button"
