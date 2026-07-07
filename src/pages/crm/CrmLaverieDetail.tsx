@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { supabase } from '../../supabaseClient';
 import { resolveCrmSiteIdForEmplacement } from '../../lib/resolveCrmSiteForEmplacement';
+import styles from './laverieDetail.module.css';
 
 type Laverie = {
   id: string;
@@ -231,7 +232,7 @@ export default function CrmLaverieDetail() {
   if (loading) return <p style={{ color: '#666' }}>Chargement...</p>;
   if (!laverie) {
     return (
-      <div style={{ maxWidth: 1200, margin: '0 auto' }}>
+      <div className={styles.page}>
         {notice ? (
           <div style={{ padding: 12, marginBottom: 12, backgroundColor: '#FEE2E2', color: '#B91C1C', borderRadius: 10 }}>
             {notice}
@@ -243,50 +244,40 @@ export default function CrmLaverieDetail() {
   }
 
   return (
-    <div style={{ maxWidth: 1200, margin: '0 auto' }}>
-      <div style={{ background: '#fff', border: '1px solid #eee', borderRadius: 14, padding: 20, marginBottom: 16 }}>
-        <button onClick={() => navigate('/crm/laveries')} style={{ marginBottom: 12 }}>Retour</button>
-        <h1 style={{ margin: 0, fontSize: 30 }}>{laverie.nom}</h1>
-        <p style={{ margin: '8px 0 0', color: '#666' }}>
+    <div className={styles.page}>
+      <div className={styles.headerCard}>
+        <button className={styles.backBtn} onClick={() => navigate('/crm/laveries')}>Retour</button>
+        <h1 className={styles.title}>{laverie.nom}</h1>
+        <p className={styles.subtitle}>
           {laverie.ville} - Ajoutee le {new Date(laverie.created_at).toLocaleDateString('fr-FR')}
         </p>
         {linkedEmplacementId ? (
-          <p style={{ margin: '12px 0 0' }}>
-            <button
-              type="button"
-              onClick={() => navigate(`/emplacements/${linkedEmplacementId}`)}
-              style={{
-                border: '1px solid #1c69d3',
-                background: '#fff',
-                color: '#1c69d3',
-                borderRadius: 8,
-                padding: '8px 14px',
-                fontWeight: 600,
-                cursor: 'pointer',
-              }}
-            >
-              Voir la fiche board (machines, CA, même historique)
-            </button>
-          </p>
+          <button
+            type="button"
+            className={styles.boardLinkBtn}
+            onClick={() => navigate(`/emplacements/${linkedEmplacementId}`)}
+          >
+            Voir la fiche board (machines, CA, même historique)
+          </button>
         ) : null}
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 16 }}>
-        <div style={{ background: '#fff', border: '1px solid #eee', borderRadius: 14, padding: 16 }}>
-          <h2 style={{ marginTop: 0 }}>Historique des interventions</h2>
+      <div className={styles.grid}>
+        <div className={styles.card}>
+          <h2 className={styles.cardTitle}>Historique des interventions</h2>
           {historique.length === 0 ? (
-            <p style={{ color: '#777' }}>Aucune intervention cloturee.</p>
+            <p className={styles.emptyText}>Aucune intervention cloturee.</p>
           ) : (
-            <div style={{ display: 'grid', gap: 12 }}>
+            <div className={styles.historiqueList}>
               {historique.map((item) => (
-                <div key={item.id} style={{ border: '1px solid #eee', borderRadius: 10, padding: 12 }}>
-                  <p style={{ margin: 0, fontWeight: 700 }}>{item.motif}</p>
-                  <p style={{ margin: '6px 0', color: '#666' }}>
+                <div key={item.id} className={styles.historiqueItem}>
+                  <p className={styles.historiqueMotif}>{item.motif}</p>
+                  <p className={styles.historiqueMeta}>
                     {new Date(item.date_intervention).toLocaleDateString('fr-FR')} - {item.technicien_nom}
                   </p>
-                  <p style={{ margin: '0 0 6px' }}>{item.description}</p>
-                  <p style={{ margin: 0, color: '#444' }}>{item.compte_rendu}</p>
+                  <p className={styles.historiqueDesc}>{item.description}</p>
+                  <p className={styles.historiqueCompteRendu}>{item.compte_rendu}</p>
                   {item.pieces_changees ? (
-                    <p style={{ margin: '8px 0 0', color: '#555', fontSize: 14 }}>
+                    <p className={styles.historiquePieces}>
                       <strong>Pièces changées :</strong> {item.pieces_changees}
                     </p>
                   ) : null}
@@ -295,34 +286,31 @@ export default function CrmLaverieDetail() {
             </div>
           )}
         </div>
-        <div style={{ display: 'grid', gap: 16 }}>
-          <div style={{ background: '#fff', border: '1px solid #eee', borderRadius: 14, padding: 16 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
-              <h2 style={{ margin: 0 }}>Album photos</h2>
-              <label style={{ background: '#1c69d3', color: '#fff', borderRadius: 8, padding: '8px 12px', cursor: 'pointer', fontWeight: 600 }}>
+        <div className={styles.column}>
+          <div className={styles.card}>
+            <div className={styles.photosHeader}>
+              <h2 className={styles.cardTitle} style={{ marginBottom: 0 }}>Album photos</h2>
+              <label className={styles.addPhotoBtn}>
                 + Ajouter
                 <input type="file" accept="image/*" multiple style={{ display: 'none' }} onChange={uploadPhotos} />
               </label>
             </div>
-            {notice && <p style={{ margin: '0 0 10px', color: '#b91c1c' }}>{notice}</p>}
+            {notice && <p className={styles.notice}>{notice}</p>}
             {photosLoading ? (
-              <p style={{ color: '#666' }}>Chargement des photos...</p>
+              <p className={styles.emptyText}>Chargement des photos...</p>
             ) : photos.length === 0 ? (
-              <p style={{ color: '#777' }}>Aucune photo.</p>
+              <p className={styles.emptyText}>Aucune photo.</p>
             ) : (
-              <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill,minmax(110px,1fr))', gap: 10 }}>
+              <div className={styles.photoGrid}>
                 {photos.map((photo) => (
-                  <div key={photo.id} style={{ position: 'relative' }}>
+                  <div key={photo.id} className={styles.photoItem}>
                     <img
                       src={photo.url}
                       alt={photo.id}
-                      style={{ width: '100%', height: 110, objectFit: 'cover', borderRadius: 8, border: '1px solid #eee', cursor: 'pointer' }}
+                      className={styles.photoImg}
                       onClick={() => window.open(photo.url, '_blank')}
                     />
-                    <button
-                      onClick={() => void deletePhoto(photo.id)}
-                      style={{ position: 'absolute', top: 6, right: 6, border: 'none', background: 'rgba(220,38,38,0.92)', color: '#fff', borderRadius: 6, padding: '4px 6px', cursor: 'pointer', fontSize: 12 }}
-                    >
+                    <button className={styles.photoDeleteBtn} onClick={() => void deletePhoto(photo.id)}>
                       Suppr
                     </button>
                   </div>
@@ -332,33 +320,31 @@ export default function CrmLaverieDetail() {
           </div>
 
           {laverie.photo_principale && (
-            <div style={{ background: '#fff', border: '1px solid #eee', borderRadius: 14, overflow: 'hidden' }}>
-              <img src={laverie.photo_principale} alt={laverie.nom} style={{ width: '100%', height: 260, objectFit: 'cover' }} />
+            <div className={styles.photoPrincipaleWrap}>
+              <img src={laverie.photo_principale} alt={laverie.nom} className={styles.photoPrincipaleImg} />
             </div>
           )}
-          <div style={{ background: '#fff', border: '1px solid #eee', borderRadius: 14, padding: 16 }}>
-            <h2 style={{ marginTop: 0 }}>Informations</h2>
-            <p><strong>Adresse:</strong> {laverie.adresse}</p>
-            <p><strong>Code postal:</strong> {laverie.code_postal}</p>
-            <p><strong>Ville:</strong> {laverie.ville}</p>
-            {laverie.telephone && <p><strong>Telephone:</strong> {laverie.telephone}</p>}
-            {laverie.email && <p><strong>Email:</strong> {laverie.email}</p>}
-            {laverie.infos_supplementaires && <p><strong>Infos supplementaires:</strong> {laverie.infos_supplementaires}</p>}
-            <div style={{ marginTop: 14, borderTop: '1px solid #f1f1f1', paddingTop: 12 }}>
-              <p style={{ margin: '0 0 8px', fontWeight: 700 }}>Notes / Infos supplémentaires</p>
+          <div className={styles.card}>
+            <h2 className={styles.cardTitle}>Informations</h2>
+            <p className={styles.infoText}><strong>Adresse:</strong> {laverie.adresse}</p>
+            <p className={styles.infoText}><strong>Code postal:</strong> {laverie.code_postal}</p>
+            <p className={styles.infoText}><strong>Ville:</strong> {laverie.ville}</p>
+            {laverie.telephone && <p className={styles.infoText}><strong>Telephone:</strong> {laverie.telephone}</p>}
+            {laverie.email && <p className={styles.infoText}><strong>Email:</strong> {laverie.email}</p>}
+            {laverie.infos_supplementaires && (
+              <p className={styles.infoText}><strong>Infos supplementaires:</strong> {laverie.infos_supplementaires}</p>
+            )}
+            <div className={styles.notesBlock}>
+              <p className={styles.notesLabel}>Notes / Infos supplémentaires</p>
               <textarea
+                className={styles.notesTextarea}
                 value={notesValue}
                 onChange={(e) => setNotesValue(e.target.value)}
                 rows={5}
                 placeholder="Ajoute ici des informations utiles (consignes, accès, détails techniques...)."
-                style={{ width: '100%', border: '1px solid #ddd', borderRadius: 8, padding: 10, fontFamily: 'inherit', fontSize: 14, boxSizing: 'border-box' }}
               />
-              <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 8 }}>
-                <button
-                  onClick={() => void saveNotes()}
-                  disabled={savingNotes}
-                  style={{ border: 'none', background: '#1c69d3', color: '#fff', borderRadius: 8, padding: '8px 12px', fontWeight: 600, cursor: savingNotes ? 'wait' : 'pointer' }}
-                >
+              <div className={styles.notesSaveWrap}>
+                <button className={styles.saveBtn} onClick={() => void saveNotes()} disabled={savingNotes}>
                   {savingNotes ? 'Enregistrement...' : 'Enregistrer'}
                 </button>
               </div>
