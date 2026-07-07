@@ -270,7 +270,7 @@ export default function CrmLaverieDetail() {
           </p>
         ) : null}
       </div>
-      <div style={{ display: 'grid', gridTemplateColumns: '1.2fr 1fr', gap: 16 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 16 }}>
         <div style={{ background: '#fff', border: '1px solid #eee', borderRadius: 14, padding: 16 }}>
           <h2 style={{ marginTop: 0 }}>Historique des interventions</h2>
           {historique.length === 0 ? (

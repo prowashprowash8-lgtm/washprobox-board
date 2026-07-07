@@ -151,7 +151,7 @@ export default function CrmUtilisateurDetail() {
             </p>
           </div>
 
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))', gap: 16 }}>
             <div style={{ background: '#fff', border: '1px solid #eee', borderRadius: 14, padding: 16 }}>
               <h2 style={{ marginTop: 0 }}>Planning (interventions)</h2>
               {interventions.length === 0 ? (
