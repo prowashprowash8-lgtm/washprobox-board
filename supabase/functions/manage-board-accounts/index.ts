@@ -124,19 +124,34 @@ Deno.serve(async (req) => {
     if (mode === 'create') {
       const email = String(body.email ?? '').trim().toLowerCase();
       const password = String(body.password ?? '');
-      if (!email || !password || password.length < 8) {
-        return json(400, { error: 'invalid_create_payload' });
-      }
 
-      const { data: created, error: createErr } = await admin.auth.admin.createUser({
-        email,
-        password,
-        email_confirm: true,
-      });
-      if (createErr || !created.user) {
-        return json(400, { error: createErr?.message ?? 'user_create_failed' });
+      // Un compte existant (ex: déjà client sur l'app mobile, ou déjà CRM) avec cet email
+      // est réutilisé tel quel : Supabase n'autorise qu'un seul compte par email, partagé
+      // entre l'app, le board et le CRM. On rattache juste le rôle board, sans toucher au
+      // mot de passe existant.
+      const { data: existingProfile, error: existingProfileErr } = await admin
+        .from('profiles')
+        .select('id')
+        .eq('email', email)
+        .maybeSingle();
+      if (existingProfileErr) return json(500, { error: existingProfileErr.message });
+
+      if (existingProfile?.id) {
+        targetUserId = existingProfile.id;
+      } else {
+        if (!email || !password || password.length < 8) {
+          return json(400, { error: 'invalid_create_payload' });
+        }
+        const { data: created, error: createErr } = await admin.auth.admin.createUser({
+          email,
+          password,
+          email_confirm: true,
+        });
+        if (createErr || !created.user) {
+          return json(400, { error: createErr?.message ?? 'user_create_failed' });
+        }
+        targetUserId = created.user.id;
       }
-      targetUserId = created.user.id;
     }
 
     if (!targetUserId) return json(400, { error: 'user_id_required' });

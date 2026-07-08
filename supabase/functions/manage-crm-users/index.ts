@@ -81,20 +81,36 @@ Deno.serve(async (req) => {
     const role: Role = body.role === 'patron' ? 'patron' : 'salarie';
     const isActive = body.is_active !== false;
 
-    if (!email || !password || password.length < 8) {
-      return json(400, { error: 'invalid_create_payload' });
-    }
+    // Un compte existant (ex: déjà client sur l'app mobile) avec cet email est réutilisé
+    // tel quel : Supabase n'autorise qu'un seul compte par email, partagé entre l'app et le
+    // CRM. On rattache juste le rôle CRM, sans toucher au mot de passe existant.
+    const { data: existingProfile, error: existingProfileErr } = await admin
+      .from('profiles')
+      .select('id')
+      .eq('email', email)
+      .maybeSingle();
+    if (existingProfileErr) return json(500, { error: existingProfileErr.message });
 
-    const { data: created, error: createErr } = await admin.auth.admin.createUser({
-      email,
-      password,
-      email_confirm: true,
-    });
-    if (createErr || !created.user) {
-      return json(400, { error: createErr?.message ?? 'user_create_failed' });
-    }
+    let userId: string;
+    let reusedExistingAccount = false;
 
-    const userId = created.user.id;
+    if (existingProfile?.id) {
+      userId = existingProfile.id;
+      reusedExistingAccount = true;
+    } else {
+      if (!password || password.length < 8) {
+        return json(400, { error: 'invalid_create_payload' });
+      }
+      const { data: created, error: createErr } = await admin.auth.admin.createUser({
+        email,
+        password,
+        email_confirm: true,
+      });
+      if (createErr || !created.user) {
+        return json(400, { error: createErr?.message ?? 'user_create_failed' });
+      }
+      userId = created.user.id;
+    }
 
     const { error: upsertErr } = await admin.from('crm_users').upsert(
       {
@@ -108,7 +124,7 @@ Deno.serve(async (req) => {
     );
     if (upsertErr) return json(500, { error: upsertErr.message });
 
-    return json(200, { ok: true, user_id: userId });
+    return json(200, { ok: true, user_id: userId, reused_existing_account: reusedExistingAccount });
   } catch (e) {
     return json(500, { error: e instanceof Error ? e.message : String(e) });
   }
