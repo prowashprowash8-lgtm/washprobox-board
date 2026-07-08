@@ -233,12 +233,6 @@ function App() {
             >
               <Menu size={20} />
             </button>
-            <div className={layoutStyles.mobileTitleWrap}>
-              <p className={layoutStyles.mobileTitle}>{mobileTitle}</p>
-              <p className={layoutStyles.mobileSubtitle}>
-                {isCrmOnly ? 'Accès CRM' : isResidence ? 'Accès résidence' : 'Accès patron'}
-              </p>
-            </div>
           </div>
         </div>
         <Routes>
@@ -314,6 +308,12 @@ function App() {
             >
               <X size={20} />
             </button>
+          </div>
+          <div className={layoutStyles.drawerTitleWrap}>
+            <p className={layoutStyles.drawerTitle}>{mobileTitle}</p>
+            <p className={layoutStyles.drawerSubtitle}>
+              {isCrmOnly ? 'Accès CRM' : isResidence ? 'Accès résidence' : 'Accès patron'}
+            </p>
           </div>
           <nav style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
             <MenuLink icon={<LayoutDashboard size={20}/>} label="Accueil" to={isCrmOnly ? '/crm/accueil' : '/'} />

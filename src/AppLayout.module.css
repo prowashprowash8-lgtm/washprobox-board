@@ -109,30 +109,6 @@
     cursor: pointer;
   }
 
-  .mobileTitleWrap {
-    min-width: 0;
-  }
-
-  .mobileTitle {
-    font-size: 15px;
-    font-weight: 700;
-    color: #111;
-    margin: 0;
-    line-height: 1.1;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .mobileSubtitle {
-    font-size: 12px;
-    color: #666;
-    margin: 3px 0 0;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
   .drawerOverlay {
     position: fixed;
     inset: 0;
@@ -181,6 +157,25 @@
     border: 1px solid #eee;
     background: #fff;
     border-radius: 12px;
+  }
+
+  .drawerTitleWrap {
+    margin-bottom: 20px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid #f0f0f0;
+  }
+
+  .drawerTitle {
+    font-size: 18px;
+    font-weight: 700;
+    color: #111;
+    margin: 0;
+  }
+
+  .drawerSubtitle {
+    font-size: 13px;
+    color: #666;
+    margin: 4px 0 0;
   }
 }
 
