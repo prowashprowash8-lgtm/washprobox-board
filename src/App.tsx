@@ -210,7 +210,6 @@ function App() {
             border: 'none',
             cursor: 'pointer',
             color: '#666',
-            fontSize: 14,
             borderRadius: 8,
           }}
         >
