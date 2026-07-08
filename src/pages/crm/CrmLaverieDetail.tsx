@@ -30,6 +30,14 @@ type Historique = {
   pieces_changees: string | null;
 };
 
+type Machine = {
+  id: string;
+  nom: string;
+  esp32_id: string;
+  actif: boolean | null;
+  hors_service: boolean | null;
+};
+
 export default function CrmLaverieDetail() {
   const navigate = useNavigate();
   const { id, emplacementId } = useParams();
@@ -43,6 +51,104 @@ export default function CrmLaverieDetail() {
   const [laverie, setLaverie] = useState<Laverie | null>(null);
   const [historique, setHistorique] = useState<Historique[]>([]);
   const [linkedEmplacementId, setLinkedEmplacementId] = useState<string | null>(null);
+  const [machines, setMachines] = useState<Machine[]>([]);
+  const [machinesLoading, setMachinesLoading] = useState(false);
+  const [machinesError, setMachinesError] = useState<string | null>(null);
+  const [busyMachineId, setBusyMachineId] = useState<string | null>(null);
+
+  const loadMachines = async (empId: string) => {
+    setMachinesLoading(true);
+    const { data, error } = await supabase
+      .from('machines')
+      .select('id, nom, esp32_id, actif, hors_service')
+      .eq('emplacement_id', empId)
+      .order('nom', { ascending: true });
+    if (!error) setMachines((data ?? []) as Machine[]);
+    setMachinesLoading(false);
+  };
+
+  const toggleMachineService = async (machine: Machine) => {
+    setBusyMachineId(machine.id);
+    setMachinesError(null);
+    const nextHorsService = !(machine.hors_service ?? false);
+    const { error } = await supabase.from('machines').update({ hors_service: nextHorsService }).eq('id', machine.id);
+    if (error) {
+      setMachinesError(error.message);
+    } else {
+      setMachines((prev) => prev.map((m) => (m.id === machine.id ? { ...m, hors_service: nextHorsService } : m)));
+    }
+    setBusyMachineId(null);
+  };
+
+  const releaseMachine = async (machine: Machine) => {
+    setBusyMachineId(machine.id);
+    setMachinesError(null);
+    const { error } = await supabase.rpc('release_machine', { p_esp32_id: machine.esp32_id });
+    if (error) setMachinesError(error.message);
+    setBusyMachineId(null);
+  };
+
+  const launchTestCycle = async (machine: Machine) => {
+    const normalizedEsp32Id = (machine.esp32_id || '').trim().toUpperCase();
+    if (!normalizedEsp32Id) {
+      setMachinesError('ID ESP32 manquant sur cette machine.');
+      return;
+    }
+    setBusyMachineId(machine.id);
+    setMachinesError(null);
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (!user) throw new Error('Non connecté.');
+
+      const { data: profile, error: profileErr } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('id', user.id)
+        .maybeSingle();
+      if (profileErr) throw new Error(`Profil introuvable : ${profileErr.message}`);
+      if (!profile?.id) {
+        throw new Error('Aucun profil client lié à ce compte. Le cycle de test nécessite un profil (id identique au compte connecté).');
+      }
+
+      const { data: txData, error: txErr } = await supabase
+        .from('transactions')
+        .insert({
+          user_id: profile.id,
+          machine_id: machine.id,
+          emplacement_id: linkedEmplacementId,
+          amount: 0,
+          payment_method: 'test',
+        })
+        .select('id')
+        .single();
+      if (txErr) throw new Error(`Transaction : ${txErr.message}`);
+      if (!txData?.id) throw new Error('Transaction test non créée.');
+
+      const { data: cmdData, error: cmdErr } = await supabase
+        .from('machine_commands')
+        .insert({
+          machine_id: machine.id,
+          esp32_id: normalizedEsp32Id,
+          command: 'START',
+          status: 'pending',
+          user_id: profile.id,
+          transaction_id: txData.id,
+        })
+        .select('id')
+        .single();
+      if (cmdErr) throw new Error(`Commande ESP32 : ${cmdErr.message}`);
+      if (!cmdData?.id) throw new Error('Commande ESP32 non créée.');
+
+      await supabase.from('transactions').update({ machine_command_id: cmdData.id }).eq('id', txData.id);
+      await supabase.from('machines').update({ statut: 'occupe', estimated_end_time: null }).eq('id', machine.id);
+    } catch (err) {
+      setMachinesError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setBusyMachineId(null);
+    }
+  };
 
   const ensureLaverieFromBoard = async (boardEmplacementId: string) => {
     const empRes = await supabase.from('emplacements').select('id, name, address').eq('id', boardEmplacementId).single();
@@ -180,6 +286,11 @@ export default function CrmLaverieDetail() {
     void load();
   }, [id, emplacementId]);
 
+  useEffect(() => {
+    if (linkedEmplacementId) void loadMachines(linkedEmplacementId);
+    else setMachines([]);
+  }, [linkedEmplacementId]);
+
   const uploadPhotos = async (e: React.ChangeEvent<HTMLInputElement>) => {
     if (!laverie || !storageFolderId) return;
     const files = e.target.files;
@@ -261,6 +372,61 @@ export default function CrmLaverieDetail() {
           </button>
         ) : null}
       </div>
+
+      {linkedEmplacementId ? (
+        <div className={styles.card} style={{ marginBottom: 16 }}>
+          <h2 className={styles.cardTitle}>Machines</h2>
+          {machinesError && <p className={styles.notice}>{machinesError}</p>}
+          {machinesLoading ? (
+            <p className={styles.emptyText}>Chargement des machines...</p>
+          ) : machines.length === 0 ? (
+            <p className={styles.emptyText}>Aucune machine sur cette laverie.</p>
+          ) : (
+            <div className={styles.machineList}>
+              {machines.map((m) => (
+                <div key={m.id} className={styles.machineRow}>
+                  <div className={styles.machineInfo}>
+                    <p className={styles.machineName}>{m.nom}</p>
+                    <p className={styles.machineMeta}>
+                      ESP32 : {m.esp32_id} ·{' '}
+                      <span style={{ color: m.hors_service ? '#B91C1C' : '#166534', fontWeight: 600 }}>
+                        {m.hors_service ? 'Hors service' : 'En service'}
+                      </span>
+                    </p>
+                  </div>
+                  <div className={styles.machineActions}>
+                    <button
+                      type="button"
+                      className={styles.machineBtnService}
+                      disabled={busyMachineId === m.id}
+                      onClick={() => void toggleMachineService(m)}
+                    >
+                      {m.hors_service ? 'Remettre en service' : 'Mettre hors service'}
+                    </button>
+                    <button
+                      type="button"
+                      className={styles.machineBtnTest}
+                      disabled={busyMachineId === m.id || !m.esp32_id}
+                      onClick={() => void launchTestCycle(m)}
+                    >
+                      Lancer un cycle test
+                    </button>
+                    <button
+                      type="button"
+                      className={styles.machineBtnRelease}
+                      disabled={busyMachineId === m.id}
+                      onClick={() => void releaseMachine(m)}
+                    >
+                      Repasser en disponible
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      ) : null}
+
       <div className={styles.grid}>
         <div className={styles.card}>
           <h2 className={styles.cardTitle}>Historique des interventions</h2>

@@ -15,15 +15,32 @@ export default function CrmInterventions() {
   const [selectedUserId, setSelectedUserId] = useState<string>('ALL');
   const [interventions, setInterventions] = useState<Intervention[]>([]);
   const [currentWeekDate, setCurrentWeekDate] = useState(new Date());
+  const [isSalarie, setIsSalarie] = useState(false);
 
   const loadData = async () => {
     setIsLoading(true);
+
+    const {
+      data: { user: authUser },
+    } = await supabase.auth.getUser();
+    const currentUserId = authUser?.id ?? null;
+    let currentUserIsSalarie = false;
+    if (currentUserId) {
+      const { data: crmUser } = await supabase.from('crm_users').select('role').eq('id', currentUserId).maybeSingle();
+      currentUserIsSalarie = crmUser?.role === 'salarie';
+    }
+    setIsSalarie(currentUserIsSalarie);
+
     const [usersRes, interRes] = await Promise.all([
       supabase.from('users').select('*').order('first_name', { ascending: true }),
-      supabase.from('interventions').select('*').order('date', { ascending: true }),
+      currentUserIsSalarie && currentUserId
+        ? supabase.from('interventions').select('*').eq('user_id', currentUserId).order('date', { ascending: true })
+        : supabase.from('interventions').select('*').order('date', { ascending: true }),
     ]);
     if (!usersRes.error) setUsers((usersRes.data ?? []) as User[]);
     if (!interRes.error) setInterventions((interRes.data ?? []) as Intervention[]);
+    // Un salarié ne voit et ne peut sélectionner que son propre planning.
+    setSelectedUserId(currentUserIsSalarie && currentUserId ? currentUserId : 'ALL');
     setIsLoading(false);
   };
 
@@ -62,19 +79,21 @@ export default function CrmInterventions() {
   return (
     <div className={styles.container}>
       <div className={styles.content}>
-        <div className={styles.techniciensSection}>
-          <div className={styles.sectionHeader}><h2>Techniciens</h2></div>
-          <div className={styles.techList}>
-            <div className={`${styles.techCard} ${selectedUserId === 'ALL' ? styles.techCardActive : ''}`} style={{ borderColor: 'red' }} onClick={() => setSelectedUserId('ALL')}>
-              <div className={styles.techInfo}><div className={styles.techColor} style={{ background: 'red' }}></div><span className={styles.techName}>Global</span><span className={styles.techCount}>{interventions.length} intervention(s)</span></div>
-            </div>
-            {users.map((user) => (
-              <div key={user.id} className={`${styles.techCard} ${selectedUserId === user.id ? styles.techCardActive : ''}`} style={{ borderColor: getUserColor(user.id) }} onClick={() => setSelectedUserId(user.id)}>
-                <div className={styles.techInfo}><div className={styles.techColor} style={{ background: getUserColor(user.id) }}></div><span className={styles.techName}>{user.first_name}</span><span className={styles.techCount}>{interventions.filter((i) => i.user_id === user.id).length} intervention(s)</span></div>
+        {!isSalarie && (
+          <div className={styles.techniciensSection}>
+            <div className={styles.sectionHeader}><h2>Techniciens</h2></div>
+            <div className={styles.techList}>
+              <div className={`${styles.techCard} ${selectedUserId === 'ALL' ? styles.techCardActive : ''}`} style={{ borderColor: 'red' }} onClick={() => setSelectedUserId('ALL')}>
+                <div className={styles.techInfo}><div className={styles.techColor} style={{ background: 'red' }}></div><span className={styles.techName}>Global</span><span className={styles.techCount}>{interventions.length} intervention(s)</span></div>
               </div>
-            ))}
+              {users.map((user) => (
+                <div key={user.id} className={`${styles.techCard} ${selectedUserId === user.id ? styles.techCardActive : ''}`} style={{ borderColor: getUserColor(user.id) }} onClick={() => setSelectedUserId(user.id)}>
+                  <div className={styles.techInfo}><div className={styles.techColor} style={{ background: getUserColor(user.id) }}></div><span className={styles.techName}>{user.first_name}</span><span className={styles.techCount}>{interventions.filter((i) => i.user_id === user.id).length} intervention(s)</span></div>
+                </div>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
         <div className={styles.interventionsSection}>
           <div className={styles.interventionHeader}>
             <h2>{selectedUserId === 'ALL' ? 'Planning de toutes les interventions' : `Planning de ${users.find((u) => u.id === selectedUserId)?.first_name}`}</h2>
