@@ -55,6 +55,7 @@ export default function Transactions() {
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
 
   const fetchTransactions = useCallback(async (showLoading = true) => {
     setError(null);
@@ -181,8 +182,13 @@ export default function Transactions() {
     );
   };
 
+  const q = query.trim().toLowerCase();
+  const matchesQuery = (fields: Array<string | null | undefined>) =>
+    !q || fields.some((f) => (f || '').toLowerCase().includes(q));
+
   const displayRows: DisplayRow[] = [];
   for (const t of transactions) {
+    if (!matchesQuery([t.user_name, t.machine_nom, t.emplacement_name, t.promo_code])) continue;
     if (t.transaction_finished_at) {
       displayRows.push({
         kind: 'stop',
@@ -222,13 +228,20 @@ export default function Transactions() {
         <div style={{ padding: 12, marginBottom: 20, backgroundColor: '#FEE2E2', color: '#B91C1C', borderRadius: 10 }}>{error}</div>
       )}
 
+      <input
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder="Rechercher par client, machine, laverie ou code promo..."
+        style={{ width: '100%', maxWidth: 420, marginBottom: 16, border: '1px solid #DDD', borderRadius: 8, padding: '10px 12px', fontSize: 14, boxSizing: 'border-box' }}
+      />
+
       <div style={{ backgroundColor: '#FFF', borderRadius: 16, border: '1px solid #EEE', overflow: 'hidden' }}>
         {loading ? (
           <div style={{ padding: 48, textAlign: 'center', color: '#666' }}>Chargement...</div>
         ) : displayRows.length === 0 ? (
           <div style={{ padding: 64, textAlign: 'center', color: '#666' }}>
             <Receipt size={48} color="#CCC" style={{ marginBottom: 16 }} />
-            <p style={{ margin: 0, fontSize: 16 }}>Aucune transaction pour le moment.</p>
+            <p style={{ margin: 0, fontSize: 16 }}>{transactions.length === 0 ? 'Aucune transaction pour le moment.' : 'Aucun résultat.'}</p>
           </div>
         ) : (
           <div style={{ overflowX: 'auto' }}>

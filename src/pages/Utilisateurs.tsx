@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 
@@ -21,6 +21,7 @@ export default function Utilisateurs() {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [query, setQuery] = useState('');
 
   useEffect(() => {
     const fetch = async () => {
@@ -69,6 +70,16 @@ export default function Utilisateurs() {
     return name || '—';
   };
 
+  const filteredProfiles = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return profiles;
+    return profiles.filter((p) => {
+      const name = displayName(p).toLowerCase();
+      const email = (p.email || '').toLowerCase();
+      return name.includes(q) || email.includes(q);
+    });
+  }, [profiles, query]);
+
   if (loading) return <p style={{ color: '#666' }}>Chargement...</p>;
   if (error) return <p style={{ color: '#B91C1C' }}>Erreur : {error}</p>;
 
@@ -79,9 +90,16 @@ export default function Utilisateurs() {
         Personnes ayant créé un compte sur l&apos;application. Les comptes d&apos;accès au board sont gérés séparément.
       </p>
 
+      <input
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+        placeholder="Rechercher par nom ou email..."
+        style={{ width: '100%', maxWidth: 420, marginBottom: 16, border: '1px solid #DDD', borderRadius: 8, padding: '10px 12px', fontSize: 14, boxSizing: 'border-box' }}
+      />
+
       <div style={{ backgroundColor: '#FFF', borderRadius: 16, border: '1px solid #EEE', overflow: 'hidden' }}>
-        {profiles.length === 0 ? (
-          <p style={{ padding: 32, color: '#666' }}>Aucun utilisateur.</p>
+        {filteredProfiles.length === 0 ? (
+          <p style={{ padding: 32, color: '#666' }}>{profiles.length === 0 ? 'Aucun utilisateur.' : 'Aucun résultat.'}</p>
         ) : (
           <div style={{ overflowX: 'auto' }}>
           <table style={{ width: '100%', borderCollapse: 'collapse' }}>
@@ -94,7 +112,7 @@ export default function Utilisateurs() {
               </tr>
             </thead>
             <tbody>
-              {profiles.map((p) => (
+              {filteredProfiles.map((p) => (
                 <tr
                   key={p.id}
                   onClick={() => navigate(`/utilisateurs/${p.id}`)}
