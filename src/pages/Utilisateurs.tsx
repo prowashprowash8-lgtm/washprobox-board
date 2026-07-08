@@ -24,9 +24,10 @@ export default function Utilisateurs() {
 
   useEffect(() => {
     const fetch = async () => {
-      const [{ data, error: fetchErr }, { data: boardRoles, error: boardRolesErr }] = await Promise.all([
+      const [{ data, error: fetchErr }, { data: boardRoles, error: boardRolesErr }, { data: crmUsers, error: crmUsersErr }] = await Promise.all([
         supabase.from('profiles').select('*'),
         supabase.from('board_account_roles').select('user_id'),
+        supabase.from('crm_users').select('id'),
       ]);
       if (fetchErr) {
         setError(fetchErr.message);
@@ -34,12 +35,18 @@ export default function Utilisateurs() {
       } else if (boardRolesErr) {
         setError(boardRolesErr.message);
         setProfiles([]);
+      } else if (crmUsersErr) {
+        setError(crmUsersErr.message);
+        setProfiles([]);
       } else {
         setError(null);
         const boardIds = new Set(
           (boardRoles ?? []).map((r: { user_id?: string | null }) => r.user_id ?? '').filter(Boolean)
         );
-        const filtered = (data ?? []).filter((p: Profile) => !boardIds.has(p.id));
+        const crmIds = new Set(
+          (crmUsers ?? []).map((r: { id?: string | null }) => r.id ?? '').filter(Boolean)
+        );
+        const filtered = (data ?? []).filter((p: Profile) => !boardIds.has(p.id) && !crmIds.has(p.id));
         const sorted = filtered.sort((a: Profile, b: Profile) => {
           const da = a.created_at ? new Date(a.created_at).getTime() : 0;
           const db = b.created_at ? new Date(b.created_at).getTime() : 0;
