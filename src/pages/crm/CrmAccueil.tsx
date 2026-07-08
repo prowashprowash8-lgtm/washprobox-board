@@ -3,17 +3,24 @@ import { useNavigate } from 'react-router-dom';
 import { MapContainer, TileLayer, Marker, Tooltip } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
-import markerIcon from 'leaflet/dist/images/marker-icon.png';
-import markerIcon2x from 'leaflet/dist/images/marker-icon-2x.png';
-import markerShadow from 'leaflet/dist/images/marker-shadow.png';
 import { supabase } from '../../supabaseClient';
 import styles from './accueil.module.css';
 
-// Sans ça, Vite ne trouve pas les images d'icône par défaut de Leaflet (marqueurs invisibles).
-L.Icon.Default.mergeOptions({
-  iconUrl: markerIcon,
-  iconRetinaUrl: markerIcon2x,
-  shadowUrl: markerShadow,
+// Point coloré fait en CSS (pas une image) : évite les soucis de chargement des icônes
+// par défaut de Leaflet avec Vite (marqueur "cassé").
+const laverieIcon = L.divIcon({
+  className: 'laverie-marker',
+  html: `<div style="
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: #1C69D3;
+    border: 3px solid #fff;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.4);
+  "></div>`,
+  iconSize: [18, 18],
+  iconAnchor: [9, 9],
+  tooltipAnchor: [0, -9],
 });
 
 type StatRow = { label: string; value: number; color: string };
@@ -85,6 +92,7 @@ export default function CrmAccueil() {
                 <Marker
                   key={l.id}
                   position={[l.latitude, l.longitude]}
+                  icon={laverieIcon}
                   eventHandlers={{ click: () => navigate(`/crm/laveries/${l.id}`) }}
                 >
                   <Tooltip>
