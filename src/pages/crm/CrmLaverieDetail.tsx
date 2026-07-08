@@ -51,6 +51,10 @@ export default function CrmLaverieDetail() {
   const [laverie, setLaverie] = useState<Laverie | null>(null);
   const [historique, setHistorique] = useState<Historique[]>([]);
   const [linkedEmplacementId, setLinkedEmplacementId] = useState<string | null>(null);
+  const [editingHistoriqueId, setEditingHistoriqueId] = useState<number | null>(null);
+  const [historiqueForm, setHistoriqueForm] = useState({ motif: '', description: '', compte_rendu: '', pieces_changees: '' });
+  const [savingHistorique, setSavingHistorique] = useState(false);
+  const [historiqueError, setHistoriqueError] = useState<string | null>(null);
   const [machines, setMachines] = useState<Machine[]>([]);
   const [machinesLoading, setMachinesLoading] = useState(false);
   const [machinesError, setMachinesError] = useState<string | null>(null);
@@ -319,6 +323,56 @@ export default function CrmLaverieDetail() {
     await loadPhotos(storageFolderId);
   };
 
+  const startEditHistorique = (item: Historique) => {
+    setHistoriqueError(null);
+    setEditingHistoriqueId(item.id);
+    setHistoriqueForm({
+      motif: item.motif ?? '',
+      description: item.description ?? '',
+      compte_rendu: item.compte_rendu ?? '',
+      pieces_changees: item.pieces_changees ?? '',
+    });
+  };
+
+  const cancelEditHistorique = () => {
+    setEditingHistoriqueId(null);
+    setHistoriqueError(null);
+  };
+
+  const saveHistorique = async (itemId: number) => {
+    setSavingHistorique(true);
+    setHistoriqueError(null);
+    const { error } = await supabase
+      .from('historique')
+      .update({
+        motif: historiqueForm.motif.trim(),
+        description: historiqueForm.description.trim(),
+        compte_rendu: historiqueForm.compte_rendu.trim(),
+        pieces_changees: historiqueForm.pieces_changees.trim() || null,
+      })
+      .eq('id', itemId);
+    if (error) {
+      setHistoriqueError(`Sauvegarde impossible : ${error.message}`);
+      setSavingHistorique(false);
+      return;
+    }
+    setHistorique((prev) =>
+      prev.map((h) =>
+        h.id === itemId
+          ? {
+              ...h,
+              motif: historiqueForm.motif.trim(),
+              description: historiqueForm.description.trim(),
+              compte_rendu: historiqueForm.compte_rendu.trim(),
+              pieces_changees: historiqueForm.pieces_changees.trim() || null,
+            }
+          : h
+      )
+    );
+    setEditingHistoriqueId(null);
+    setSavingHistorique(false);
+  };
+
   const saveNotes = async () => {
     if (!laverie) return;
     if (laverie.id.startsWith('board-')) {
@@ -434,21 +488,78 @@ export default function CrmLaverieDetail() {
             <p className={styles.emptyText}>Aucune intervention cloturee.</p>
           ) : (
             <div className={styles.historiqueList}>
-              {historique.map((item) => (
-                <div key={item.id} className={styles.historiqueItem}>
-                  <p className={styles.historiqueMotif}>{item.motif}</p>
-                  <p className={styles.historiqueMeta}>
-                    {new Date(item.date_intervention).toLocaleDateString('fr-FR')} - {item.technicien_nom}
-                  </p>
-                  <p className={styles.historiqueDesc}>{item.description}</p>
-                  <p className={styles.historiqueCompteRendu}>{item.compte_rendu}</p>
-                  {item.pieces_changees ? (
-                    <p className={styles.historiquePieces}>
-                      <strong>Pièces changées :</strong> {item.pieces_changees}
+              {historiqueError && <p className={styles.notice}>{historiqueError}</p>}
+              {historique.map((item) =>
+                editingHistoriqueId === item.id ? (
+                  <div key={item.id} className={styles.historiqueItem}>
+                    <p className={styles.historiqueMeta} style={{ marginBottom: 8 }}>
+                      {new Date(item.date_intervention).toLocaleDateString('fr-FR')} - {item.technicien_nom}
                     </p>
-                  ) : null}
-                </div>
-              ))}
+                    <label className={styles.notesLabel} style={{ marginBottom: 4 }}>Motif</label>
+                    <input
+                      className={styles.notesTextarea}
+                      style={{ marginBottom: 8 }}
+                      value={historiqueForm.motif}
+                      onChange={(e) => setHistoriqueForm((p) => ({ ...p, motif: e.target.value }))}
+                    />
+                    <label className={styles.notesLabel} style={{ marginBottom: 4 }}>Description</label>
+                    <textarea
+                      className={styles.notesTextarea}
+                      style={{ marginBottom: 8 }}
+                      rows={2}
+                      value={historiqueForm.description}
+                      onChange={(e) => setHistoriqueForm((p) => ({ ...p, description: e.target.value }))}
+                    />
+                    <label className={styles.notesLabel} style={{ marginBottom: 4 }}>Compte-rendu</label>
+                    <textarea
+                      className={styles.notesTextarea}
+                      style={{ marginBottom: 8 }}
+                      rows={4}
+                      value={historiqueForm.compte_rendu}
+                      onChange={(e) => setHistoriqueForm((p) => ({ ...p, compte_rendu: e.target.value }))}
+                    />
+                    <label className={styles.notesLabel} style={{ marginBottom: 4 }}>Pièces changées</label>
+                    <input
+                      className={styles.notesTextarea}
+                      style={{ marginBottom: 10 }}
+                      value={historiqueForm.pieces_changees}
+                      onChange={(e) => setHistoriqueForm((p) => ({ ...p, pieces_changees: e.target.value }))}
+                    />
+                    <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                      <button className={styles.machineBtnService} onClick={cancelEditHistorique} disabled={savingHistorique}>
+                        Annuler
+                      </button>
+                      <button className={styles.saveBtn} onClick={() => void saveHistorique(item.id)} disabled={savingHistorique}>
+                        {savingHistorique ? 'Enregistrement...' : 'Enregistrer'}
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div key={item.id} className={styles.historiqueItem}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+                      <p className={styles.historiqueMotif}>{item.motif}</p>
+                      <button
+                        type="button"
+                        className={styles.machineBtnService}
+                        style={{ flexShrink: 0 }}
+                        onClick={() => startEditHistorique(item)}
+                      >
+                        Modifier
+                      </button>
+                    </div>
+                    <p className={styles.historiqueMeta}>
+                      {new Date(item.date_intervention).toLocaleDateString('fr-FR')} - {item.technicien_nom}
+                    </p>
+                    <p className={styles.historiqueDesc}>{item.description}</p>
+                    <p className={styles.historiqueCompteRendu}>{item.compte_rendu}</p>
+                    {item.pieces_changees ? (
+                      <p className={styles.historiquePieces}>
+                        <strong>Pièces changées :</strong> {item.pieces_changees}
+                      </p>
+                    ) : null}
+                  </div>
+                )
+              )}
             </div>
           )}
         </div>
