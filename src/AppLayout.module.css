@@ -98,15 +98,25 @@
   .burgerBtn {
     height: 40px;
     width: 40px;
+    padding: 0;
+    box-sizing: border-box;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     border: 1px solid #eee;
     background: #fff;
+    color: #111;
     border-radius: 12px;
     touch-action: manipulation;
     -webkit-tap-highlight-color: transparent;
     cursor: pointer;
+    flex-shrink: 0;
+  }
+
+  .burgerBtn svg {
+    color: #111;
+    stroke: #111;
+    display: block;
   }
 
   .drawerOverlay {
@@ -151,12 +161,22 @@
   .drawerCloseBtn {
     height: 40px;
     width: 40px;
+    padding: 0;
+    box-sizing: border-box;
     display: inline-flex;
     align-items: center;
     justify-content: center;
     border: 1px solid #eee;
     background: #fff;
+    color: #111;
     border-radius: 12px;
+    flex-shrink: 0;
+  }
+
+  .drawerCloseBtn svg {
+    color: #111;
+    stroke: #111;
+    display: block;
   }
 
   .drawerTitleWrap {
