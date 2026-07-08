@@ -150,7 +150,7 @@ function App() {
           : location.pathname.startsWith('/appareils')
             ? 'Appareils'
             : location.pathname.startsWith('/utilisateurs')
-              ? 'Utilisateurs'
+              ? 'Utilisateurs app'
               : location.pathname.startsWith('/missions')
                 ? 'Missions'
                 : location.pathname.startsWith('/marketing')
@@ -181,7 +181,7 @@ function App() {
               <MenuLink icon={<Target size={20}/>} label="Missions" to="/missions" />
               <MenuLink icon={<RotateCcw size={20}/>} label="Remboursements" to="/remboursements" badge={pendingRefundCount} />
               <hr style={{ width: '100%', border: '0.5px solid #F0F0F0', margin: '10px 0' }} />
-              <MenuLink icon={<Users size={20}/>} label="Utilisateurs" to="/utilisateurs" />
+              <MenuLink icon={<Users size={20}/>} label="Utilisateurs app" to="/utilisateurs" />
               <MenuLink icon={<Settings size={20}/>} label="Configuration" to="/configuration" />
             </>
           )}
@@ -325,7 +325,7 @@ function App() {
                 <MenuLink icon={<Megaphone size={20}/>} label="Marketing" to="/marketing" />
                 <MenuLink icon={<Target size={20}/>} label="Missions" to="/missions" />
                 <MenuLink icon={<RotateCcw size={20}/>} label="Remboursements" to="/remboursements" badge={pendingRefundCount} />
-                <MenuLink icon={<Users size={20}/>} label="Utilisateurs" to="/utilisateurs" />
+                <MenuLink icon={<Users size={20}/>} label="Utilisateurs app" to="/utilisateurs" />
                 <MenuLink icon={<Settings size={20}/>} label="Configuration" to="/configuration" />
               </>
             )}

@@ -85,7 +85,7 @@ export default function Utilisateurs() {
 
   return (
     <div>
-      <h1 style={{ fontSize: 28, fontWeight: '700', color: '#000', margin: '0 0 8px' }}>Utilisateurs</h1>
+      <h1 style={{ fontSize: 28, fontWeight: '700', color: '#000', margin: '0 0 8px' }}>Utilisateurs app</h1>
       <p style={{ color: '#666', margin: '0 0 32px' }}>
         Personnes ayant créé un compte sur l&apos;application. Les comptes d&apos;accès au board sont gérés séparément.
       </p>
