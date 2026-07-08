@@ -27,6 +27,15 @@ interface Emplacement {
   address?: string;
 }
 
+interface UsageRow {
+  id: string;
+  created_at: string;
+  amount: number | null;
+  payment_method: string | null;
+  status: string | null;
+  user_nom: string | null;
+}
+
 export default function MachineDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -52,6 +61,8 @@ export default function MachineDetail() {
   });
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  const [usageRows, setUsageRows] = useState<UsageRow[]>([]);
+  const [usageLoading, setUsageLoading] = useState(false);
 
   useEffect(() => {
     if (machine) {
@@ -67,6 +78,35 @@ export default function MachineDetail() {
       });
     }
   }, [machine]);
+
+  useEffect(() => {
+    if (!id) return;
+    setUsageLoading(true);
+    supabase
+      .from('transactions')
+      .select('id, created_at, amount, payment_method, status, profiles(first_name, last_name)')
+      .eq('machine_id', id)
+      .order('created_at', { ascending: false })
+      .limit(200)
+      .then(({ data, error: usageErr }) => {
+        if (!usageErr) {
+          setUsageRows(
+            (data ?? []).map((t) => {
+              const profile = (t as unknown as { profiles?: { first_name?: string; last_name?: string } | null }).profiles;
+              return {
+                id: String((t as { id: string }).id),
+                created_at: String((t as { created_at: string }).created_at),
+                amount: (t as { amount?: number }).amount ?? null,
+                payment_method: (t as { payment_method?: string }).payment_method ?? null,
+                status: (t as { status?: string }).status ?? null,
+                user_nom: [profile?.first_name, profile?.last_name].filter(Boolean).join(' ') || null,
+              };
+            })
+          );
+        }
+        setUsageLoading(false);
+      });
+  }, [id]);
 
   useEffect(() => {
     if (!id) return;
@@ -631,6 +671,40 @@ export default function MachineDetail() {
             </div>
           </div>
         </div>
+      </div>
+
+      <div style={{ padding: 28, backgroundColor: '#FFF', borderRadius: 16, border: '1px solid #EEE', marginTop: 24 }}>
+        <h3 style={{ margin: '0 0 16px', fontSize: 16, fontWeight: '600', color: '#000' }}>Historique des utilisations</h3>
+        {usageLoading ? (
+          <p style={{ color: '#666' }}>Chargement...</p>
+        ) : usageRows.length === 0 ? (
+          <p style={{ color: '#666' }}>Aucune utilisation pour cet appareil.</p>
+        ) : (
+          <div style={{ overflowX: 'auto' }}>
+            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
+              <thead>
+                <tr style={{ textAlign: 'left', color: '#666', borderBottom: '1px solid #eee' }}>
+                  <th style={{ padding: '8px 10px' }}>Date</th>
+                  <th style={{ padding: '8px 10px' }}>Client</th>
+                  <th style={{ padding: '8px 10px' }}>Montant</th>
+                  <th style={{ padding: '8px 10px' }}>Paiement</th>
+                  <th style={{ padding: '8px 10px' }}>Statut</th>
+                </tr>
+              </thead>
+              <tbody>
+                {usageRows.map((r) => (
+                  <tr key={r.id} style={{ borderBottom: '1px solid #f5f5f5' }}>
+                    <td style={{ padding: '8px 10px' }}>{new Date(r.created_at).toLocaleString('fr-FR')}</td>
+                    <td style={{ padding: '8px 10px' }}>{r.user_nom || '—'}</td>
+                    <td style={{ padding: '8px 10px' }}>{r.amount != null ? `${Number(r.amount).toFixed(2)} €` : '—'}</td>
+                    <td style={{ padding: '8px 10px' }}>{r.payment_method || '—'}</td>
+                    <td style={{ padding: '8px 10px' }}>{r.status || '—'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
     </div>
