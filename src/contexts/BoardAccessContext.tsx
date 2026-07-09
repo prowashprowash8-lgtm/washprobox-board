@@ -94,31 +94,8 @@ export function BoardAccessProvider({ children }: { children: React.ReactNode })
 
     loadAccess();
 
-    if (!user) {
-      return () => {
-        cancelled = true;
-      };
-    }
-
-    // Ré-applique immédiatement un changement de rôle ou d'accès (ex: retrait de l'accès
-    // à une laverie pour un gérant de résidence) sans attendre un rechargement de page.
-    const channel = supabase
-      .channel(`board-access-${user.id}`)
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'board_account_roles', filter: `user_id=eq.${user.id}` },
-        () => loadAccess()
-      )
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'board_account_emplacements', filter: `user_id=eq.${user.id}` },
-        () => loadAccess()
-      )
-      .subscribe();
-
     return () => {
       cancelled = true;
-      supabase.removeChannel(channel);
     };
   }, [user]);
 
