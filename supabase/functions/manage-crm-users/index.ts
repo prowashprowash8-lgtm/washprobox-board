@@ -8,7 +8,7 @@ const cors: Record<string, string> = {
 type Role = 'patron' | 'salarie';
 
 type Payload = {
-  mode?: 'create' | 'delete';
+  mode?: 'create' | 'update' | 'delete';
   email?: string;
   password?: string;
   first_name?: string | null;
@@ -59,7 +59,7 @@ Deno.serve(async (req) => {
 
     const body = (await req.json()) as Payload;
     const mode = body.mode ?? 'create';
-    if (mode !== 'create' && mode !== 'delete') return json(400, { error: 'invalid_mode' });
+    if (mode !== 'create' && mode !== 'update' && mode !== 'delete') return json(400, { error: 'invalid_mode' });
 
     if (mode === 'delete') {
       const targetUserId = String(body.user_id ?? '').trim();
@@ -73,6 +73,34 @@ Deno.serve(async (req) => {
       if (deleteAuthErr) return json(500, { error: deleteAuthErr.message });
 
       return json(200, { ok: true });
+    }
+
+    if (mode === 'update') {
+      const targetUserId = String(body.user_id ?? '').trim();
+      if (!targetUserId) return json(400, { error: 'user_id_required' });
+
+      const firstNameUpd = String(body.first_name ?? '').trim() || null;
+      const roleUpd: Role = body.role === 'patron' ? 'patron' : 'salarie';
+      const isActiveUpd = body.is_active !== false;
+      const newEmail = String(body.email ?? '').trim().toLowerCase();
+
+      if (newEmail) {
+        const { error: updateEmailErr } = await admin.auth.admin.updateUserById(targetUserId, { email: newEmail, email_confirm: true });
+        if (updateEmailErr) return json(400, { error: updateEmailErr.message });
+      }
+
+      const { error: updateRowErr } = await admin
+        .from('crm_users')
+        .update({
+          ...(newEmail ? { email: newEmail } : {}),
+          first_name: firstNameUpd,
+          role: roleUpd,
+          is_active: isActiveUpd,
+        })
+        .eq('id', targetUserId);
+      if (updateRowErr) return json(500, { error: updateRowErr.message });
+
+      return json(200, { ok: true, user_id: targetUserId });
     }
 
     const email = String(body.email ?? '').trim().toLowerCase();

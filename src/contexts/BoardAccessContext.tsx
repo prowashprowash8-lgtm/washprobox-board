@@ -10,6 +10,7 @@ interface BoardAccessContextType {
   allowedEmplacementIds: string[];
   isPatron: boolean;
   isResidence: boolean;
+  firstName: string | null;
   canAccessEmplacement: (emplacementId?: string | null) => boolean;
 }
 
@@ -25,6 +26,7 @@ const BoardAccessContext = createContext<BoardAccessContextType>({
   allowedEmplacementIds: [],
   isPatron: false,
   isResidence: true,
+  firstName: null,
   canAccessEmplacement: () => false,
 });
 
@@ -32,6 +34,7 @@ export function BoardAccessProvider({ children }: { children: React.ReactNode })
   const { user } = useAuth();
   const [role, setRole] = useState<BoardRole>('residence');
   const [allowedEmplacementIds, setAllowedEmplacementIds] = useState<string[]>([]);
+  const [firstName, setFirstName] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -42,6 +45,7 @@ export function BoardAccessProvider({ children }: { children: React.ReactNode })
         if (!cancelled) {
           setRole('residence');
           setAllowedEmplacementIds([]);
+          setFirstName(null);
           setLoading(false);
         }
         return;
@@ -51,7 +55,7 @@ export function BoardAccessProvider({ children }: { children: React.ReactNode })
       try {
         const { data: roleRow } = await supabase
           .from('board_account_roles')
-          .select('role')
+          .select('role, first_name')
           .eq('user_id', user.id)
           .maybeSingle();
 
@@ -60,6 +64,7 @@ export function BoardAccessProvider({ children }: { children: React.ReactNode })
 
         if (!cancelled) {
           setRole(resolvedRole);
+          setFirstName(roleRow?.first_name ?? null);
         }
 
         if (resolvedRole === 'residence') {
@@ -84,6 +89,7 @@ export function BoardAccessProvider({ children }: { children: React.ReactNode })
           // l'accès patron par défaut.
           setRole('residence');
           setAllowedEmplacementIds([]);
+          setFirstName(null);
         }
       } finally {
         if (!cancelled) {
@@ -110,13 +116,14 @@ export function BoardAccessProvider({ children }: { children: React.ReactNode })
       allowedEmplacementIds,
       isPatron,
       isResidence,
+      firstName,
       canAccessEmplacement: (emplacementId?: string | null) => {
         if (isPatron) return true;
         if (!emplacementId) return false;
         return allowedSet.has(emplacementId);
       },
     };
-  }, [allowedEmplacementIds, loading, role]);
+  }, [allowedEmplacementIds, loading, role, firstName]);
 
   return (
     <BoardAccessContext.Provider value={value}>

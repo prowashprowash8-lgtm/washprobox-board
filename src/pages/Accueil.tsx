@@ -80,7 +80,7 @@ const STATUS_COLORS: Record<string, string> = {
 
 export default function Accueil() {
   const { user } = useAuth();
-  const { isResidence, allowedEmplacementIds, isPatron } = useBoardAccess();
+  const { isResidence, allowedEmplacementIds, isPatron, firstName } = useBoardAccess();
   const [periode, setPeriode] = useState<Periode>('mois');
   const [ca, setCa] = useState<number | null>(null);
   const [nbAppareils, setNbAppareils] = useState<number>(0);
@@ -268,7 +268,9 @@ export default function Accueil() {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 20, marginBottom: 32 }}>
         <div>
-          <h1 style={{ fontSize: 28, fontWeight: '700', color: '#000', margin: 0 }}>Bienvenue Victor !</h1>
+          <h1 style={{ fontSize: 28, fontWeight: '700', color: '#000', margin: 0 }}>
+            Bienvenue{firstName ? ` ${firstName}` : ''} !
+          </h1>
           <p style={{ color: '#666', margin: '8px 0 0' }}>
             {isResidence
               ? 'Vue résidence : uniquement vos laveries et leur chiffre d’affaires.'

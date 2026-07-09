@@ -13,6 +13,7 @@ interface ManagerRow {
   id: string;
   email: string;
   name: string;
+  firstName: string | null;
   role: BoardRole | null;
   emplacementIds: string[];
 }
@@ -79,6 +80,7 @@ export default function GerantsResidences({ embedded = false }: GerantsResidence
   const [form, setForm] = useState({
     email: '',
     password: '',
+    firstName: '',
     role: 'residence' as BoardRole,
     emplacementIds: [] as string[],
   });
@@ -92,6 +94,7 @@ export default function GerantsResidences({ embedded = false }: GerantsResidence
     setForm({
       email: '',
       password: '',
+      firstName: '',
       role: 'residence',
       emplacementIds: [],
     });
@@ -112,6 +115,7 @@ export default function GerantsResidences({ embedded = false }: GerantsResidence
     setForm({
       email: manager.email,
       password: '',
+      firstName: manager.firstName ?? '',
       role: manager.role ?? 'residence',
       emplacementIds: manager.emplacementIds,
     });
@@ -141,13 +145,15 @@ export default function GerantsResidences({ embedded = false }: GerantsResidence
         id: string;
         role: BoardRole;
         email: string | null;
+        first_name?: string | null;
         emplacement_ids: string[];
       }>;
 
       const rows: ManagerRow[] = managersRaw.map((m) => ({
         id: m.id,
         email: m.email ?? 'Email inconnu',
-        name: m.email ?? m.id,
+        name: m.first_name?.trim() || m.email || m.id,
+        firstName: m.first_name ?? null,
         role: m.role ?? null,
         emplacementIds: Array.isArray(m.emplacement_ids) ? m.emplacement_ids : [],
       }));
@@ -192,6 +198,7 @@ export default function GerantsResidences({ embedded = false }: GerantsResidence
           mode: 'create',
           email: form.email.trim(),
           password: form.password,
+          first_name: form.firstName.trim() || null,
           role: form.role,
           emplacement_ids: form.role === 'residence' ? form.emplacementIds : [],
         },
@@ -250,6 +257,8 @@ export default function GerantsResidences({ embedded = false }: GerantsResidence
         body: {
           mode: 'update',
           user_id: editing.id,
+          email: form.email.trim(),
+          first_name: form.firstName.trim() || null,
           role: form.role,
           emplacement_ids: form.role === 'residence' ? form.emplacementIds : [],
         },
@@ -384,36 +393,37 @@ export default function GerantsResidences({ embedded = false }: GerantsResidence
               {editing ? 'Régler l’accès du compte' : 'Créer un compte gérant'}
             </h3>
             <form onSubmit={editing ? handleUpdate : handleCreate}>
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ display: 'block', marginBottom: 6, fontSize: 14, fontWeight: '500', color: '#374151' }}>Prénom</label>
+                <input
+                  type="text"
+                  value={form.firstName}
+                  onChange={(e) => setForm((prev) => ({ ...prev, firstName: e.target.value }))}
+                  placeholder="Ex: Sophie"
+                  style={{ width: '100%', padding: 12, border: '1px solid #E5E7EB', borderRadius: 10, fontSize: 15, boxSizing: 'border-box' }}
+                />
+              </div>
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ display: 'block', marginBottom: 6, fontSize: 14, fontWeight: '500', color: '#374151' }}>Email</label>
+                <input
+                  type="email"
+                  value={form.email}
+                  onChange={(e) => setForm((prev) => ({ ...prev, email: e.target.value }))}
+                  required
+                  style={{ width: '100%', padding: 12, border: '1px solid #E5E7EB', borderRadius: 10, fontSize: 15, boxSizing: 'border-box' }}
+                />
+              </div>
               {!editing && (
-                <>
-                  <div style={{ marginBottom: 16 }}>
-                    <label style={{ display: 'block', marginBottom: 6, fontSize: 14, fontWeight: '500', color: '#374151' }}>Email</label>
-                    <input
-                      type="email"
-                      value={form.email}
-                      onChange={(e) => setForm((prev) => ({ ...prev, email: e.target.value }))}
-                      required
-                      style={{ width: '100%', padding: 12, border: '1px solid #E5E7EB', borderRadius: 10, fontSize: 15, boxSizing: 'border-box' }}
-                    />
-                  </div>
-                  <div style={{ marginBottom: 16 }}>
-                    <label style={{ display: 'block', marginBottom: 6, fontSize: 14, fontWeight: '500', color: '#374151' }}>Mot de passe</label>
-                    <input
-                      type="password"
-                      value={form.password}
-                      onChange={(e) => setForm((prev) => ({ ...prev, password: e.target.value }))}
-                      required
-                      minLength={8}
-                      style={{ width: '100%', padding: 12, border: '1px solid #E5E7EB', borderRadius: 10, fontSize: 15, boxSizing: 'border-box' }}
-                    />
-                  </div>
-                </>
-              )}
-
-              {editing && (
-                <div style={{ marginBottom: 16, padding: 12, backgroundColor: '#F8F9FA', borderRadius: 10, fontSize: 14, color: '#444' }}>
-                  <strong>{editing.name}</strong>
-                  <div>{editing.email}</div>
+                <div style={{ marginBottom: 16 }}>
+                  <label style={{ display: 'block', marginBottom: 6, fontSize: 14, fontWeight: '500', color: '#374151' }}>Mot de passe</label>
+                  <input
+                    type="password"
+                    value={form.password}
+                    onChange={(e) => setForm((prev) => ({ ...prev, password: e.target.value }))}
+                    required
+                    minLength={8}
+                    style={{ width: '100%', padding: 12, border: '1px solid #E5E7EB', borderRadius: 10, fontSize: 15, boxSizing: 'border-box' }}
+                  />
                 </div>
               )}
 

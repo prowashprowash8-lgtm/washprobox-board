@@ -9,6 +9,7 @@ type Payload = {
   mode?: 'create' | 'update' | 'list' | 'delete';
   email?: string;
   password?: string;
+  first_name?: string | null;
   role?: 'patron' | 'residence';
   user_id?: string;
   emplacement_ids?: string[];
@@ -58,7 +59,7 @@ Deno.serve(async (req) => {
 
     if (mode === 'list') {
       const [{ data: roles, error: rolesErr }, { data: accesses, error: accessesErr }] = await Promise.all([
-        admin.from('board_account_roles').select('user_id, role').order('updated_at', { ascending: false }),
+        admin.from('board_account_roles').select('user_id, role, first_name').order('updated_at', { ascending: false }),
         admin.from('board_account_emplacements').select('user_id, emplacement_id'),
       ]);
       if (rolesErr) return json(500, { error: rolesErr.message });
@@ -81,9 +82,10 @@ Deno.serve(async (req) => {
       );
       const emailById = new Map(users);
 
-      const managers = (roles ?? []).map((r: { user_id: string; role: 'patron' | 'residence' }) => ({
+      const managers = (roles ?? []).map((r: { user_id: string; role: 'patron' | 'residence'; first_name?: string | null }) => ({
         id: r.user_id,
         role: r.role,
+        first_name: r.first_name ?? null,
         email: emailById.get(r.user_id) ?? null,
         emplacement_ids: accessMap.get(r.user_id) ?? [],
       }));
@@ -118,6 +120,7 @@ Deno.serve(async (req) => {
     const emplacementIds = Array.isArray(body.emplacement_ids)
       ? body.emplacement_ids.map((x) => String(x).trim()).filter(Boolean)
       : [];
+    const firstName = String(body.first_name ?? '').trim() || null;
 
     let targetUserId = String(body.user_id ?? '').trim();
 
@@ -156,9 +159,17 @@ Deno.serve(async (req) => {
 
     if (!targetUserId) return json(400, { error: 'user_id_required' });
 
+    if (mode === 'update' && body.email) {
+      const newEmail = String(body.email).trim().toLowerCase();
+      if (newEmail) {
+        const { error: updateEmailErr } = await admin.auth.admin.updateUserById(targetUserId, { email: newEmail, email_confirm: true });
+        if (updateEmailErr) return json(400, { error: updateEmailErr.message });
+      }
+    }
+
     const { error: upsertRoleErr } = await admin
       .from('board_account_roles')
-      .upsert({ user_id: targetUserId, role }, { onConflict: 'user_id' });
+      .upsert({ user_id: targetUserId, role, first_name: firstName }, { onConflict: 'user_id' });
     if (upsertRoleErr) return json(500, { error: upsertRoleErr.message });
 
     const { error: deleteAccessErr } = await admin

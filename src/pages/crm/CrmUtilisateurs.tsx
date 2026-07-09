@@ -74,6 +74,31 @@ export default function CrmUtilisateurs({ embedded = false }: CrmUtilisateursPro
     await load();
   };
 
+  const updateEmail = async (row: CrmUser, newEmail: string) => {
+    const trimmed = newEmail.trim();
+    if (!trimmed || trimmed === row.email) return;
+    setSaving(true);
+    const { data, error: invokeErr } = await supabase.functions.invoke('manage-crm-users', {
+      body: {
+        mode: 'update',
+        user_id: row.id,
+        email: trimmed,
+        first_name: row.first_name,
+        role: row.role,
+        is_active: row.is_active,
+      },
+    });
+    if (invokeErr || data?.error) {
+      setNotice(String(data?.error ?? invokeErr?.message ?? 'Modification de l’email impossible.'));
+      setSaving(false);
+      await load();
+      return;
+    }
+    setNotice('Email mis à jour.');
+    await load();
+    setSaving(false);
+  };
+
   const deleteUser = async (id: string, email: string | null) => {
     if (!window.confirm(`Supprimer définitivement le compte ${email ?? id} ? Cette personne ne pourra plus se connecter du tout.`)) {
       return;
@@ -144,7 +169,14 @@ export default function CrmUtilisateurs({ embedded = false }: CrmUtilisateursPro
                   style={{ cursor: 'pointer' }}
                   title="Ouvrir le dossier utilisateur (planning, clôtures, commandes)"
                 >
-                  <td>{row.email}</td>
+                  <td onClick={(e) => e.stopPropagation()}>
+                    <input
+                      className={styles.inlineInput}
+                      type="email"
+                      defaultValue={row.email ?? ''}
+                      onBlur={(e) => void updateEmail(row, e.target.value)}
+                    />
+                  </td>
                   <td onClick={(e) => e.stopPropagation()}>
                     <input
                       className={styles.inlineInput}
