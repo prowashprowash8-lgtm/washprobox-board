@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { supabase } from '../supabaseClient';
 import { ArrowLeft, Plus, Settings, Euro, TrendingUp, Cpu, Trash2 } from 'lucide-react';
@@ -40,6 +40,12 @@ interface TransactionRow {
   status: string | null;
   machine_id: string | null;
   user_nom: string | null;
+}
+
+interface AddressSuggestion {
+  label: string;
+  latitude: number | null;
+  longitude: number | null;
 }
 
 interface HistoriqueRow {
@@ -93,7 +99,12 @@ export default function EmplacementDetail() {
     actif: true,
     machine_kind: 'lavage' as MachineKind,
   });
-  const [formLaverie, setFormLaverie] = useState({ name: '', address: '' });
+  const [formLaverie, setFormLaverie] = useState({ name: '', address: '', latitude: null as number | null, longitude: null as number | null });
+  const [addressSuggestions, setAddressSuggestions] = useState<AddressSuggestion[]>([]);
+  const [addressLoading, setAddressLoading] = useState(false);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [geocodeNotice, setGeocodeNotice] = useState<string | null>(null);
+  const addressDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
@@ -361,9 +372,74 @@ export default function EmplacementDetail() {
 
   useEffect(() => {
     if (emplacement) {
-      setFormLaverie({ name: emplacement.name, address: emplacement.address ?? '' });
+      setFormLaverie({ name: emplacement.name, address: emplacement.address ?? '', latitude: null, longitude: null });
     }
   }, [emplacement]);
+
+  const fetchAddressSuggestions = useCallback(async (query: string) => {
+    if (!query.trim() || query.trim().length < 3) {
+      setAddressSuggestions([]);
+      return;
+    }
+    setAddressLoading(true);
+    try {
+      const res = await fetch(
+        `https://api-adresse.data.gouv.fr/search/?q=${encodeURIComponent(query.trim())}&limit=5`
+      );
+      const data = await res.json();
+      const suggestions = (data.features ?? []).map((f: { properties?: { label?: string }; geometry?: { coordinates?: number[] } }) => {
+        const label = f.properties?.label ?? '';
+        const lng = Number(f.geometry?.coordinates?.[0]);
+        const lat = Number(f.geometry?.coordinates?.[1]);
+        return {
+          label,
+          latitude: Number.isFinite(lat) ? lat : null,
+          longitude: Number.isFinite(lng) ? lng : null,
+        };
+      }).filter((s: AddressSuggestion) => Boolean(s.label));
+      setAddressSuggestions(suggestions);
+    } catch {
+      setAddressSuggestions([]);
+    } finally {
+      setAddressLoading(false);
+    }
+  }, []);
+
+  const handleAddressChange = useCallback((value: string) => {
+    setFormLaverie((p) => ({ ...p, address: value, latitude: null, longitude: null }));
+    setGeocodeNotice(null);
+    setShowSuggestions(true);
+    if (addressDebounceRef.current) clearTimeout(addressDebounceRef.current);
+    if (value.trim().length < 3) {
+      setAddressSuggestions([]);
+      return;
+    }
+    addressDebounceRef.current = setTimeout(() => {
+      fetchAddressSuggestions(value);
+    }, 300);
+  }, [fetchAddressSuggestions]);
+
+  const handleAddressSelect = useCallback((suggestion: AddressSuggestion) => {
+    setFormLaverie((p) => ({
+      ...p,
+      address: suggestion.label,
+      latitude: suggestion.latitude,
+      longitude: suggestion.longitude,
+    }));
+    if (suggestion.latitude != null && suggestion.longitude != null) {
+      setGeocodeNotice(`Coordonnées détectées: ${suggestion.latitude.toFixed(6)}, ${suggestion.longitude.toFixed(6)}`);
+    } else {
+      setGeocodeNotice('Coordonnées non trouvées automatiquement pour cette adresse.');
+    }
+    setAddressSuggestions([]);
+    setShowSuggestions(false);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (addressDebounceRef.current) clearTimeout(addressDebounceRef.current);
+    };
+  }, []);
 
   const handleAddMachine = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -405,10 +481,43 @@ export default function EmplacementDetail() {
     if (!id) return;
     setSaving(true);
     try {
-      await supabase.from('emplacements').update({
+      let latitude = formLaverie.latitude;
+      let longitude = formLaverie.longitude;
+      if ((latitude == null || longitude == null) && formLaverie.address.trim().length >= 3) {
+        try {
+          const res = await fetch(
+            `https://api-adresse.data.gouv.fr/search/?q=${encodeURIComponent(formLaverie.address.trim())}&limit=1`
+          );
+          const dataGeo = await res.json();
+          const first = dataGeo?.features?.[0];
+          const lng = Number(first?.geometry?.coordinates?.[0]);
+          const lat = Number(first?.geometry?.coordinates?.[1]);
+          if (Number.isFinite(lat) && Number.isFinite(lng)) {
+            latitude = lat;
+            longitude = lng;
+          }
+        } catch {
+          // géocodage optionnel, ne bloque pas la sauvegarde
+        }
+      }
+
+      const payload: Record<string, unknown> = {
         name: formLaverie.name.trim(),
         address: formLaverie.address.trim() || null,
-      }).eq('id', id);
+      };
+      if (latitude != null && longitude != null) {
+        payload.latitude = latitude;
+        payload.longitude = longitude;
+      }
+
+      let { error: updateErr } = await supabase.from('emplacements').update(payload).eq('id', id);
+      if (updateErr && (updateErr.message.includes('latitude') || updateErr.message.includes('longitude'))) {
+        ({ error: updateErr } = await supabase
+          .from('emplacements')
+          .update({ name: formLaverie.name.trim(), address: formLaverie.address.trim() || null })
+          .eq('id', id));
+      }
+
       setShowParams(false);
       await fetchData();
     } finally {
@@ -944,15 +1053,56 @@ export default function EmplacementDetail() {
                   style={{ width: '100%', padding: 12, border: '1px solid #E5E7EB', borderRadius: 10, fontSize: 15, boxSizing: 'border-box' }}
                 />
               </div>
-              <div style={{ marginBottom: 24 }}>
+              <div style={{ marginBottom: 24, position: 'relative' }}>
                 <label style={{ display: 'block', marginBottom: 6, fontSize: 14, fontWeight: '500', color: '#374151' }}>Adresse</label>
                 <input
                   type="text"
                   value={formLaverie.address}
-                  onChange={(e) => setFormLaverie((p) => ({ ...p, address: e.target.value }))}
-                  placeholder="Adresse de la laverie"
+                  onChange={(e) => handleAddressChange(e.target.value)}
+                  onFocus={() => addressSuggestions.length > 0 && setShowSuggestions(true)}
+                  onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
+                  placeholder="Ex: 12 rue de la Paix, 75001 Paris"
+                  autoComplete="off"
                   style={{ width: '100%', padding: 12, border: '1px solid #E5E7EB', borderRadius: 10, fontSize: 15, boxSizing: 'border-box' }}
                 />
+                {addressLoading && (
+                  <span style={{ position: 'absolute', right: 14, top: 42, fontSize: 12, color: '#6B7280' }}>Recherche...</span>
+                )}
+                {showSuggestions && addressSuggestions.length > 0 && (
+                  <ul
+                    style={{
+                      position: 'absolute',
+                      top: '100%',
+                      left: 0,
+                      right: 0,
+                      margin: 0,
+                      padding: 0,
+                      listStyle: 'none',
+                      backgroundColor: '#FFF',
+                      border: '1px solid #E5E7EB',
+                      borderRadius: 10,
+                      boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
+                      maxHeight: 200,
+                      overflowY: 'auto',
+                      zIndex: 10,
+                    }}
+                  >
+                    {addressSuggestions.map((addr) => (
+                      <li
+                        key={addr.label}
+                        onClick={() => handleAddressSelect(addr)}
+                        style={{ padding: '12px 14px', cursor: 'pointer', fontSize: 14, borderBottom: '1px solid #F0F0F0' }}
+                        onMouseEnter={(e) => { e.currentTarget.style.backgroundColor = '#F5F5F5'; }}
+                        onMouseLeave={(e) => { e.currentTarget.style.backgroundColor = '#FFF'; }}
+                      >
+                        {addr.label}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+                {geocodeNotice && (
+                  <p style={{ margin: '8px 0 0', fontSize: 12, color: '#1F2937' }}>{geocodeNotice}</p>
+                )}
               </div>
               <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
                 <button type="button" onClick={() => { setShowParams(false); setDeleteError(null); }} style={{ padding: '12px 20px', backgroundColor: '#F5F5F5', color: '#444', border: 'none', borderRadius: 10, fontWeight: '600', cursor: 'pointer' }}>
