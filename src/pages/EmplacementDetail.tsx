@@ -58,6 +58,7 @@ interface HistoriqueRow {
   technicien_id?: string | null;
   technicien_nom?: string | null;
   created_at?: string | null;
+  source?: 'interne' | 'demande_residence' | null;
 }
 
 function formatDateTimeFr(value?: string | null): string {
@@ -111,6 +112,7 @@ export default function EmplacementDetail() {
   const [historiqueRows, setHistoriqueRows] = useState<HistoriqueRow[]>([]);
   const [historiqueLoading, setHistoriqueLoading] = useState(false);
   const [historiqueError, setHistoriqueError] = useState<string | null>(null);
+  const [historiqueFilter, setHistoriqueFilter] = useState<'toutes' | 'interne' | 'demande_residence'>('toutes');
   const [crmLaverieIdForLink, setCrmLaverieIdForLink] = useState<string | null>(null);
   const [transactionRows, setTransactionRows] = useState<TransactionRow[]>([]);
   const [transactionsLoading, setTransactionsLoading] = useState(false);
@@ -170,7 +172,7 @@ export default function EmplacementDetail() {
           setCrmLaverieIdForLink(crmSiteId);
           const histRes = await supabase
             .from('historique')
-            .select('id, date_intervention, motif, compte_rendu, pieces_changees, description, technicien_id, technicien_nom, created_at')
+            .select('id, date_intervention, motif, compte_rendu, pieces_changees, description, technicien_id, technicien_nom, created_at, source')
             .eq('laverie_id', crmSiteId)
             .order('date_intervention', { ascending: false });
 
@@ -210,7 +212,7 @@ export default function EmplacementDetail() {
       setCrmLaverieIdForLink(crmSiteId);
       const histRes = await supabase
         .from('historique')
-        .select('id, date_intervention, motif, compte_rendu, pieces_changees, description, technicien_id, technicien_nom, created_at')
+        .select('id, date_intervention, motif, compte_rendu, pieces_changees, description, technicien_id, technicien_nom, created_at, source')
         .eq('laverie_id', crmSiteId)
         .order('date_intervention', { ascending: false });
 
@@ -720,6 +722,32 @@ export default function EmplacementDetail() {
           Comptes-rendus clôturés depuis le CRM, visibles aussi par les gérants de résidences.
         </p>
 
+        <div style={{ display: 'flex', gap: 8, marginBottom: 16, flexWrap: 'wrap' }}>
+          {([
+            ['toutes', 'Toutes'],
+            ['interne', 'Interventions internes'],
+            ['demande_residence', 'Demandes de résidence'],
+          ] as const).map(([value, label]) => (
+            <button
+              key={value}
+              type="button"
+              onClick={() => setHistoriqueFilter(value)}
+              style={{
+                padding: '6px 12px',
+                borderRadius: 999,
+                fontSize: 13,
+                fontWeight: 600,
+                cursor: 'pointer',
+                border: historiqueFilter === value ? '2px solid #1C69D3' : '1px solid #E5E7EB',
+                backgroundColor: historiqueFilter === value ? '#E8F1FC' : '#FFF',
+                color: '#111',
+              }}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
         {historiqueLoading ? (
           <p style={{ color: '#666', padding: 16 }}>Chargement de l&apos;historique...</p>
         ) : historiqueError ? (
@@ -728,10 +756,27 @@ export default function EmplacementDetail() {
           <p style={{ color: '#666', padding: 16 }}>Aucune intervention clôturée pour cette laverie.</p>
         ) : (
           <div style={{ display: 'grid', gap: 12 }}>
-            {historiqueRows.map((h) => (
-              <div key={h.id} style={{ border: '1px solid #EEE', borderRadius: 12, padding: 14, backgroundColor: '#FAFAFA' }}>
+            {historiqueRows
+              .filter((h) => historiqueFilter === 'toutes' || (h.source ?? 'interne') === historiqueFilter)
+              .map((h) => (
+              <div
+                key={h.id}
+                style={{
+                  border: h.source === 'demande_residence' ? '2px solid #F59E0B' : '1px solid #EEE',
+                  borderRadius: 12,
+                  padding: 14,
+                  backgroundColor: '#FAFAFA',
+                }}
+              >
                 <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', marginBottom: 8 }}>
-                  <strong style={{ color: '#111' }}>{h.motif || 'Intervention'}</strong>
+                  <strong style={{ color: '#111' }}>
+                    {h.motif || 'Intervention'}
+                    {h.source === 'demande_residence' && (
+                      <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 700, color: '#B45309', backgroundColor: '#FEF3C7', padding: '2px 8px', borderRadius: 999 }}>
+                        Demande résidence
+                      </span>
+                    )}
+                  </strong>
                   <span style={{ color: '#666', fontSize: 13 }}>
                     {formatDateTimeFr(h.date_intervention || h.created_at)}
                     {h.technicien_nom ? ` · ${h.technicien_nom}` : ''}
