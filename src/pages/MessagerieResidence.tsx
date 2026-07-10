@@ -73,7 +73,7 @@ const STATUS_COLORS: Record<string, string> = {
 
 export default function MessagerieResidence() {
   const { user } = useAuth();
-  const { allowedEmplacementIds } = useBoardAccess();
+  const { allowedEmplacementIds, isPatron } = useBoardAccess();
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -110,16 +110,19 @@ export default function MessagerieResidence() {
     setLoading(true);
     setError(null);
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('residence_messages')
         .select(`
           *,
           emplacement:emplacements(id, name, address),
           replies:residence_message_replies(*)
         `)
-        .eq('sender_id', user?.id)
         .order('created_at', { ascending: false });
-      
+      if (!isPatron) {
+        query = query.eq('sender_id', user?.id);
+      }
+      const { data, error } = await query;
+
       if (error) throw error;
       setMessages(data || []);
     } catch (err) {
@@ -130,11 +133,16 @@ export default function MessagerieResidence() {
   };
 
   useEffect(() => {
-    if (user && allowedEmplacementIds.length > 0) {
+    if (!user) return;
+    if (isPatron) {
+      fetchMessages();
+      return;
+    }
+    if (allowedEmplacementIds.length > 0) {
       fetchEmplacements();
       fetchMessages();
     }
-  }, [user, allowedEmplacementIds]);
+  }, [user, allowedEmplacementIds, isPatron]);
 
   useEffect(() => {
     if (!user) return;
@@ -210,9 +218,16 @@ export default function MessagerieResidence() {
           sender_email: user?.email,
           reply: replyText.trim(),
         });
-      
+
       if (error) throw error;
-      
+
+      if (isPatron) {
+        const message = messages.find((m) => m.id === messageId);
+        if (message?.status === 'new') {
+          await supabase.from('residence_messages').update({ status: 'in_progress' }).eq('id', messageId);
+        }
+      }
+
       setReplyText('');
       setReplyingTo(null);
       await fetchMessages();
@@ -231,32 +246,36 @@ export default function MessagerieResidence() {
             Messagerie
           </h1>
           <p style={{ color: '#666', margin: 0 }}>
-            Signalez un problème dans votre laverie au patron
+            {isPatron
+              ? 'Messages envoyés par les gérants de résidence.'
+              : 'Signalez un problème dans votre laverie au patron'}
           </p>
         </div>
-        <button
-          type="button"
-          onClick={() => {
-            setShowForm(true);
-            setError(null);
-            setSuccess(null);
-          }}
-          style={{
-            padding: '12px 20px',
-            backgroundColor: '#1C69D3',
-            color: '#FFF',
-            border: 'none',
-            borderRadius: 10,
-            fontWeight: '600',
-            cursor: 'pointer',
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-          }}
-        >
-          <Send size={18} />
-          Nouveau message
-        </button>
+        {!isPatron && (
+          <button
+            type="button"
+            onClick={() => {
+              setShowForm(true);
+              setError(null);
+              setSuccess(null);
+            }}
+            style={{
+              padding: '12px 20px',
+              backgroundColor: '#1C69D3',
+              color: '#FFF',
+              border: 'none',
+              borderRadius: 10,
+              fontWeight: '600',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8,
+            }}
+          >
+            <Send size={18} />
+            Nouveau message
+          </button>
+        )}
       </div>
 
       {error && (
@@ -439,7 +458,9 @@ export default function MessagerieResidence() {
         ) : messages.length === 0 ? (
           <div style={{ padding: 48, textAlign: 'center' }}>
             <MessageSquare size={48} color="#9CA3AF" style={{ margin: '0 auto 16px' }} />
-            <p style={{ color: '#666', fontSize: 16 }}>Aucun message envoyé pour le moment.</p>
+            <p style={{ color: '#666', fontSize: 16 }}>
+              {isPatron ? 'Aucun message reçu pour le moment.' : 'Aucun message envoyé pour le moment.'}
+            </p>
           </div>
         ) : (
           <div>
@@ -471,6 +492,7 @@ export default function MessagerieResidence() {
                       </h3>
                       <p style={{ fontSize: 14, color: '#666', margin: 0 }}>
                         {msg.emplacement?.name || 'Laverie non spécifiée'}
+                        {isPatron ? ` — ${msg.sender_email}` : ''}
                       </p>
                     </div>
                     <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>

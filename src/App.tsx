@@ -35,6 +35,7 @@ function App() {
   const navigate = useNavigate();
   const location = useLocation();
   const [pendingRefundCount, setPendingRefundCount] = useState(0);
+  const [newMessageCount, setNewMessageCount] = useState(0);
   const [crmLoading, setCrmLoading] = useState(true);
   const [crmActive, setCrmActive] = useState(false);
   const [crmRole, setCrmRole] = useState<'patron' | 'salarie' | null>(null);
@@ -88,6 +89,46 @@ function App() {
     const t = setInterval(() => fetchPendingRefundCount(), 45_000);
     return () => clearInterval(t);
   }, [user, isPatron, fetchPendingRefundCount]);
+
+  const fetchNewMessageCount = useCallback(async () => {
+    if (!isPatron) {
+      setNewMessageCount(0);
+      return;
+    }
+    const { count, error } = await supabase
+      .from('residence_messages')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'new');
+    if (!error) setNewMessageCount(count ?? 0);
+  }, [isPatron]);
+
+  useEffect(() => {
+    if (!user || !isPatron) return;
+    fetchNewMessageCount();
+  }, [user, isPatron, fetchNewMessageCount]);
+
+  useEffect(() => {
+    if (!user || !isPatron) return;
+    const channel = supabase
+      .channel('sidebar-residence-messages')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'residence_messages' },
+        () => {
+          fetchNewMessageCount();
+        }
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [user, isPatron, fetchNewMessageCount]);
+
+  useEffect(() => {
+    if (!user || !isPatron) return;
+    const t = setInterval(() => fetchNewMessageCount(), 45_000);
+    return () => clearInterval(t);
+  }, [user, isPatron, fetchNewMessageCount]);
 
   useEffect(() => {
     const loadCrmRole = async () => {
@@ -180,6 +221,7 @@ function App() {
               <MenuLink icon={<Megaphone size={20}/>} label="Marketing" to="/marketing" />
               <MenuLink icon={<Target size={20}/>} label="Missions" to="/missions" />
               <MenuLink icon={<RotateCcw size={20}/>} label="Remboursements" to="/remboursements" badge={pendingRefundCount} />
+              <MenuLink icon={<MessageSquare size={20}/>} label="Messagerie" to="/messagerie" badge={newMessageCount} />
               <hr style={{ width: '100%', border: '0.5px solid #F0F0F0', margin: '10px 0' }} />
               <MenuLink icon={<Users size={20}/>} label="Utilisateurs app" to="/utilisateurs" />
             </>
@@ -255,7 +297,7 @@ function App() {
               <Route path="/" element={<Accueil />} />
               <Route path="/emplacements" element={<Emplacements />} />
               <Route path="/emplacements/:id" element={<EmplacementDetail />} />
-              {isResidence && <Route path="/messagerie" element={<MessagerieResidence />} />}
+              {(isResidence || isPatron) && <Route path="/messagerie" element={<MessagerieResidence />} />}
               {isPatron ? (
                 <>
                   <Route path="/appareils" element={<Appareils />} />
@@ -323,6 +365,7 @@ function App() {
                 <MenuLink icon={<Megaphone size={20}/>} label="Marketing" to="/marketing" />
                 <MenuLink icon={<Target size={20}/>} label="Missions" to="/missions" />
                 <MenuLink icon={<RotateCcw size={20}/>} label="Remboursements" to="/remboursements" badge={pendingRefundCount} />
+                <MenuLink icon={<MessageSquare size={20}/>} label="Messagerie" to="/messagerie" badge={newMessageCount} />
                 <MenuLink icon={<Users size={20}/>} label="Utilisateurs app" to="/utilisateurs" />
               </>
             )}
