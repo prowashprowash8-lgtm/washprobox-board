@@ -293,11 +293,11 @@ export default function MessagerieResidence() {
         style={{
           padding: 10,
           borderRadius: 12,
-          backgroundColor: `${PRIORITY_COLORS[msg.priority]}20`,
-          color: PRIORITY_COLORS[msg.priority],
+          backgroundColor: `${msg.status === 'resolved' || msg.status === 'closed' ? STATUS_COLORS.resolved : PRIORITY_COLORS[msg.priority]}20`,
+          color: msg.status === 'resolved' || msg.status === 'closed' ? STATUS_COLORS.resolved : PRIORITY_COLORS[msg.priority],
         }}
       >
-        <AlertCircle size={20} />
+        {msg.status === 'resolved' || msg.status === 'closed' ? <CheckCircle size={20} /> : <AlertCircle size={20} />}
       </div>
       <div style={{ flex: 1 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
