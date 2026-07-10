@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Routes, Route, NavLink, Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Receipt, MapPin, Tablet, Settings, Users, Megaphone, Target, LogOut, RotateCcw, Menu, X, MessageSquare } from 'lucide-react';
+import { LayoutDashboard, Receipt, MapPin, Tablet, Users, Megaphone, Target, LogOut, RotateCcw, Menu, X, MessageSquare } from 'lucide-react';
 import Accueil from './pages/Accueil';
 import Appareils from './pages/Appareils';
 import Emplacements from './pages/Emplacements';
@@ -182,7 +182,6 @@ function App() {
               <MenuLink icon={<RotateCcw size={20}/>} label="Remboursements" to="/remboursements" badge={pendingRefundCount} />
               <hr style={{ width: '100%', border: '0.5px solid #F0F0F0', margin: '10px 0' }} />
               <MenuLink icon={<Users size={20}/>} label="Utilisateurs app" to="/utilisateurs" />
-              <MenuLink icon={<Settings size={20}/>} label="Configuration" to="/configuration" />
             </>
           )}
           {canUseCrm && (
@@ -268,7 +267,6 @@ function App() {
                   <Route path="/utilisateurs" element={<Utilisateurs />} />
                   <Route path="/utilisateurs/:id" element={<ProfileDetail />} />
                   <Route path="/gerants-residences" element={<Navigate to="/crm/utilisateurs?tab=gerants" replace />} />
-                  <Route path="/configuration" element={<ConfigurationPlaceholder />} />
                 </>
               ) : null}
               {canUseCrm ? (
@@ -326,7 +324,6 @@ function App() {
                 <MenuLink icon={<Target size={20}/>} label="Missions" to="/missions" />
                 <MenuLink icon={<RotateCcw size={20}/>} label="Remboursements" to="/remboursements" badge={pendingRefundCount} />
                 <MenuLink icon={<Users size={20}/>} label="Utilisateurs app" to="/utilisateurs" />
-                <MenuLink icon={<Settings size={20}/>} label="Configuration" to="/configuration" />
               </>
             )}
             {canUseCrm ? (
@@ -421,14 +418,5 @@ const MenuLink = ({
     </span>
   </NavLink>
 );
-
-function ConfigurationPlaceholder() {
-  return (
-    <>
-      <h1 style={{ fontSize: 28, fontWeight: '700', color: '#000' }}>Configuration</h1>
-      <p style={{ color: '#666' }}>Page en cours de développement.</p>
-    </>
-  );
-}
 
 export default App;
