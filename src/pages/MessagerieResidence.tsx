@@ -3,6 +3,7 @@ import { supabase } from '../supabaseClient';
 import { useBoardAccess } from '../contexts/BoardAccessContext';
 import { useAuth } from '../contexts/AuthContext';
 import { Send, AlertCircle, Clock, CheckCircle, XCircle, MessageSquare } from 'lucide-react';
+import { resolveCrmSiteIdForEmplacement } from '../lib/resolveCrmSiteForEmplacement';
 
 interface Emplacement {
   id: string;
@@ -90,6 +91,7 @@ export default function MessagerieResidence() {
   const [replyingTo, setReplyingTo] = useState<string | null>(null);
   const [replyText, setReplyText] = useState('');
   const [sendingReply, setSendingReply] = useState(false);
+  const [resolvingId, setResolvingId] = useState<string | null>(null);
 
   const fetchEmplacements = async () => {
     try {
@@ -98,7 +100,7 @@ export default function MessagerieResidence() {
         .select('id, name, address')
         .in('id', allowedEmplacementIds)
         .order('name');
-      
+
       if (error) throw error;
       setEmplacements(data || []);
     } catch (err) {
@@ -164,7 +166,7 @@ export default function MessagerieResidence() {
     setSending(true);
     setError(null);
     setSuccess(null);
-    
+
     try {
       const { error } = await supabase
         .from('residence_messages')
@@ -176,9 +178,9 @@ export default function MessagerieResidence() {
           message: form.message.trim(),
           priority: form.priority,
         });
-      
+
       if (error) throw error;
-      
+
       setSuccess('Message envoyé avec succès !');
       setForm({
         emplacement_id: '',
@@ -237,6 +239,247 @@ export default function MessagerieResidence() {
       setSendingReply(false);
     }
   };
+
+  const resolveMessage = async (message: ResidenceMessage) => {
+    setResolvingId(message.id);
+    setError(null);
+    try {
+      const { crmSiteId, linkUpsertError } = await resolveCrmSiteIdForEmplacement(
+        supabase,
+        message.emplacement_id ?? '',
+        message.emplacement?.name,
+        message.emplacement?.address
+      );
+      if (linkUpsertError) throw new Error(linkUpsertError);
+      if (crmSiteId) {
+        const { error: histErr } = await supabase.from('historique').insert({
+          laverie_id: crmSiteId,
+          technicien_nom: user?.email ?? 'Patron',
+          date_intervention: new Date().toISOString().slice(0, 10),
+          motif: 'gestion',
+          description: message.subject,
+          compte_rendu: message.message,
+          source: 'demande_residence',
+          residence_message_id: message.id,
+        });
+        if (histErr) throw histErr;
+      }
+
+      const { error: updateErr } = await supabase
+        .from('residence_messages')
+        .update({ status: 'resolved', resolved_at: new Date().toISOString(), resolved_by: user?.id })
+        .eq('id', message.id);
+      if (updateErr) throw updateErr;
+
+      await fetchMessages();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Erreur lors de la résolution du message');
+    } finally {
+      setResolvingId(null);
+    }
+  };
+
+  const renderMessageCard = (msg: ResidenceMessage) => (
+    <div
+      key={msg.id}
+      style={{
+        padding: 20,
+        borderBottom: '1px solid #F0F0F0',
+        display: 'flex',
+        gap: 16,
+      }}
+    >
+      <div
+        style={{
+          padding: 10,
+          borderRadius: 12,
+          backgroundColor: `${PRIORITY_COLORS[msg.priority]}20`,
+          color: PRIORITY_COLORS[msg.priority],
+        }}
+      >
+        <AlertCircle size={20} />
+      </div>
+      <div style={{ flex: 1 }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+          <div>
+            <h3 style={{ fontSize: 16, fontWeight: '600', color: '#000', margin: '0 0 4px' }}>
+              {msg.subject}
+            </h3>
+            <p style={{ fontSize: 14, color: '#666', margin: 0 }}>
+              {msg.emplacement?.name || 'Laverie non spécifiée'}
+              {isPatron ? ` — ${msg.sender_email}` : ''}
+            </p>
+          </div>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <span
+              style={{
+                padding: '4px 10px',
+                borderRadius: 999,
+                backgroundColor: `${PRIORITY_COLORS[msg.priority]}15`,
+                color: PRIORITY_COLORS[msg.priority],
+                fontSize: 12,
+                fontWeight: '600',
+              }}
+            >
+              {PRIORITY_LABELS[msg.priority]}
+            </span>
+            <span
+              style={{
+                padding: '4px 10px',
+                borderRadius: 999,
+                backgroundColor: `${STATUS_COLORS[msg.status]}15`,
+                color: STATUS_COLORS[msg.status],
+                fontSize: 12,
+                fontWeight: '600',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 4,
+              }}
+            >
+              {STATUS_ICONS[msg.status]}
+              {STATUS_LABELS[msg.status]}
+            </span>
+          </div>
+        </div>
+        <p style={{ fontSize: 15, color: '#333', margin: '0 0 12px', lineHeight: 1.5 }}>
+          {msg.message}
+        </p>
+
+        {msg.replies && msg.replies.length > 0 && (
+          <div style={{ marginBottom: 16, padding: 16, backgroundColor: '#F8F9FA', borderRadius: 10 }}>
+            <p style={{ fontSize: 13, fontWeight: '600', color: '#666', margin: '0 0 12px' }}>
+              Réponses ({msg.replies.length})
+            </p>
+            {msg.replies.map((reply) => (
+              <div
+                key={reply.id}
+                style={{
+                  padding: 12,
+                  backgroundColor: '#FFF',
+                  borderRadius: 8,
+                  marginBottom: 8,
+                  border: '1px solid #E5E7EB',
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <span style={{ fontSize: 13, fontWeight: '600', color: '#333' }}>
+                    {reply.sender_email}
+                  </span>
+                  <span style={{ fontSize: 12, color: '#999' }}>
+                    {formatDate(reply.created_at)}
+                  </span>
+                </div>
+                <p style={{ fontSize: 14, color: '#444', margin: 0, lineHeight: 1.5 }}>
+                  {reply.reply}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {replyingTo === msg.id ? (
+          <div style={{ marginBottom: 12, padding: 16, backgroundColor: '#F0F9FF', borderRadius: 10, border: '1px solid #BAE6FD' }}>
+            <textarea
+              value={replyText}
+              onChange={(e) => setReplyText(e.target.value)}
+              placeholder="Écrivez votre réponse..."
+              rows={3}
+              style={{
+                width: '100%',
+                padding: 12,
+                border: '1px solid #BAE6FD',
+                borderRadius: 8,
+                fontSize: 14,
+                boxSizing: 'border-box',
+                resize: 'vertical',
+                marginBottom: 8,
+              }}
+            />
+            <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => {
+                  setReplyingTo(null);
+                  setReplyText('');
+                }}
+                style={{
+                  padding: '8px 14px',
+                  backgroundColor: '#F5F5F5',
+                  color: '#444',
+                  border: 'none',
+                  borderRadius: 8,
+                  fontWeight: '600',
+                  fontSize: 13,
+                  cursor: 'pointer',
+                }}
+              >
+                Annuler
+              </button>
+              <button
+                onClick={() => sendReply(msg.id)}
+                disabled={sendingReply || !replyText.trim()}
+                style={{
+                  padding: '8px 14px',
+                  backgroundColor: '#1C69D3',
+                  color: '#FFF',
+                  border: 'none',
+                  borderRadius: 8,
+                  fontWeight: '600',
+                  fontSize: 13,
+                  cursor: sendingReply || !replyText.trim() ? 'not-allowed' : 'pointer',
+                  opacity: sendingReply || !replyText.trim() ? 0.6 : 1,
+                }}
+              >
+                {sendingReply ? 'Envoi...' : 'Envoyer'}
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+            <button
+              onClick={() => setReplyingTo(msg.id)}
+              style={{
+                padding: '8px 14px',
+                backgroundColor: '#1C69D3',
+                color: '#FFF',
+                border: 'none',
+                borderRadius: 8,
+                fontWeight: '600',
+                fontSize: 13,
+                cursor: 'pointer',
+              }}
+            >
+              Répondre
+            </button>
+            {isPatron && msg.status !== 'resolved' && msg.status !== 'closed' && (
+              <button
+                onClick={() => resolveMessage(msg)}
+                disabled={resolvingId === msg.id}
+                style={{
+                  padding: '8px 14px',
+                  backgroundColor: '#DCFCE7',
+                  color: '#166534',
+                  border: 'none',
+                  borderRadius: 8,
+                  fontWeight: '600',
+                  fontSize: 13,
+                  cursor: resolvingId === msg.id ? 'wait' : 'pointer',
+                }}
+              >
+                {resolvingId === msg.id ? 'Résolution...' : 'Marquer comme résolu'}
+              </button>
+            )}
+          </div>
+        )}
+
+        <p style={{ fontSize: 13, color: '#999', margin: 0 }}>
+          Envoyé le {formatDate(msg.created_at)}
+        </p>
+      </div>
+    </div>
+  );
+
+  const messagesEnCours = messages.filter((m) => m.status !== 'resolved' && m.status !== 'closed');
+  const messagesResolues = messages.filter((m) => m.status === 'resolved' || m.status === 'closed');
 
   return (
     <div>
@@ -452,200 +695,48 @@ export default function MessagerieResidence() {
         </div>
       )}
 
-      <div style={{ backgroundColor: '#FFF', borderRadius: 16, border: '1px solid #EEE', overflow: 'hidden' }}>
-        {loading ? (
+      {loading ? (
+        <div style={{ backgroundColor: '#FFF', borderRadius: 16, border: '1px solid #EEE', overflow: 'hidden' }}>
           <p style={{ padding: 32, color: '#666' }}>Chargement...</p>
-        ) : messages.length === 0 ? (
+        </div>
+      ) : messages.length === 0 ? (
+        <div style={{ backgroundColor: '#FFF', borderRadius: 16, border: '1px solid #EEE', overflow: 'hidden' }}>
           <div style={{ padding: 48, textAlign: 'center' }}>
             <MessageSquare size={48} color="#9CA3AF" style={{ margin: '0 auto 16px' }} />
             <p style={{ color: '#666', fontSize: 16 }}>
               {isPatron ? 'Aucun message reçu pour le moment.' : 'Aucun message envoyé pour le moment.'}
             </p>
           </div>
-        ) : (
-          <div>
-            {messages.map((msg) => (
-              <div
-                key={msg.id}
-                style={{
-                  padding: 20,
-                  borderBottom: '1px solid #F0F0F0',
-                  display: 'flex',
-                  gap: 16,
-                }}
-              >
-                <div
-                  style={{
-                    padding: 10,
-                    borderRadius: 12,
-                    backgroundColor: `${PRIORITY_COLORS[msg.priority]}20`,
-                    color: PRIORITY_COLORS[msg.priority],
-                  }}
-                >
-                  <AlertCircle size={20} />
-                </div>
-                <div style={{ flex: 1 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
-                    <div>
-                      <h3 style={{ fontSize: 16, fontWeight: '600', color: '#000', margin: '0 0 4px' }}>
-                        {msg.subject}
-                      </h3>
-                      <p style={{ fontSize: 14, color: '#666', margin: 0 }}>
-                        {msg.emplacement?.name || 'Laverie non spécifiée'}
-                        {isPatron ? ` — ${msg.sender_email}` : ''}
-                      </p>
-                    </div>
-                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                      <span
-                        style={{
-                          padding: '4px 10px',
-                          borderRadius: 999,
-                          backgroundColor: `${PRIORITY_COLORS[msg.priority]}15`,
-                          color: PRIORITY_COLORS[msg.priority],
-                          fontSize: 12,
-                          fontWeight: '600',
-                        }}
-                      >
-                        {PRIORITY_LABELS[msg.priority]}
-                      </span>
-                      <span
-                        style={{
-                          padding: '4px 10px',
-                          borderRadius: 999,
-                          backgroundColor: `${STATUS_COLORS[msg.status]}15`,
-                          color: STATUS_COLORS[msg.status],
-                          fontSize: 12,
-                          fontWeight: '600',
-                          display: 'flex',
-                          alignItems: 'center',
-                          gap: 4,
-                        }}
-                      >
-                        {STATUS_ICONS[msg.status]}
-                        {STATUS_LABELS[msg.status]}
-                      </span>
-                    </div>
-                  </div>
-                  <p style={{ fontSize: 15, color: '#333', margin: '0 0 12px', lineHeight: 1.5 }}>
-                    {msg.message}
-                  </p>
-                  
-                  {msg.replies && msg.replies.length > 0 && (
-                    <div style={{ marginBottom: 16, padding: 16, backgroundColor: '#F8F9FA', borderRadius: 10 }}>
-                      <p style={{ fontSize: 13, fontWeight: '600', color: '#666', margin: '0 0 12px' }}>
-                        Réponses ({msg.replies.length})
-                      </p>
-                      {msg.replies.map((reply) => (
-                        <div
-                          key={reply.id}
-                          style={{
-                            padding: 12,
-                            backgroundColor: '#FFF',
-                            borderRadius: 8,
-                            marginBottom: 8,
-                            border: '1px solid #E5E7EB',
-                          }}
-                        >
-                          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
-                            <span style={{ fontSize: 13, fontWeight: '600', color: '#333' }}>
-                              {reply.sender_email}
-                            </span>
-                            <span style={{ fontSize: 12, color: '#999' }}>
-                              {formatDate(reply.created_at)}
-                            </span>
-                          </div>
-                          <p style={{ fontSize: 14, color: '#444', margin: 0, lineHeight: 1.5 }}>
-                            {reply.reply}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-
-                  {replyingTo === msg.id ? (
-                    <div style={{ marginBottom: 12, padding: 16, backgroundColor: '#F0F9FF', borderRadius: 10, border: '1px solid #BAE6FD' }}>
-                      <textarea
-                        value={replyText}
-                        onChange={(e) => setReplyText(e.target.value)}
-                        placeholder="Écrivez votre réponse..."
-                        rows={3}
-                        style={{
-                          width: '100%',
-                          padding: 12,
-                          border: '1px solid #BAE6FD',
-                          borderRadius: 8,
-                          fontSize: 14,
-                          boxSizing: 'border-box',
-                          resize: 'vertical',
-                          marginBottom: 8,
-                        }}
-                      />
-                      <div style={{ display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-                        <button
-                          onClick={() => {
-                            setReplyingTo(null);
-                            setReplyText('');
-                          }}
-                          style={{
-                            padding: '8px 14px',
-                            backgroundColor: '#F5F5F5',
-                            color: '#444',
-                            border: 'none',
-                            borderRadius: 8,
-                            fontWeight: '600',
-                            fontSize: 13,
-                            cursor: 'pointer',
-                          }}
-                        >
-                          Annuler
-                        </button>
-                        <button
-                          onClick={() => sendReply(msg.id)}
-                          disabled={sendingReply || !replyText.trim()}
-                          style={{
-                            padding: '8px 14px',
-                            backgroundColor: '#1C69D3',
-                            color: '#FFF',
-                            border: 'none',
-                            borderRadius: 8,
-                            fontWeight: '600',
-                            fontSize: 13,
-                            cursor: sendingReply || !replyText.trim() ? 'not-allowed' : 'pointer',
-                            opacity: sendingReply || !replyText.trim() ? 0.6 : 1,
-                          }}
-                        >
-                          {sendingReply ? 'Envoi...' : 'Envoyer'}
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => setReplyingTo(msg.id)}
-                      style={{
-                        padding: '8px 14px',
-                        backgroundColor: '#1C69D3',
-                        color: '#FFF',
-                        border: 'none',
-                        borderRadius: 8,
-                        fontWeight: '600',
-                        fontSize: 13,
-                        cursor: 'pointer',
-                        marginBottom: 12,
-                      }}
-                    >
-                      Répondre
-                    </button>
-                  )}
-
-                  <p style={{ fontSize: 13, color: '#999', margin: 0 }}>
-                    Envoyé le {formatDate(msg.created_at)}
-                  </p>
-                </div>
-              </div>
-            ))}
+        </div>
+      ) : isPatron ? (
+        <>
+          <h2 style={{ fontSize: 18, fontWeight: '700', color: '#000', margin: '0 0 12px' }}>
+            Demandes en cours ({messagesEnCours.length})
+          </h2>
+          <div style={{ backgroundColor: '#FFF', borderRadius: 16, border: '1px solid #EEE', overflow: 'hidden', marginBottom: 32 }}>
+            {messagesEnCours.length === 0 ? (
+              <p style={{ padding: 32, color: '#666' }}>Aucune demande en cours.</p>
+            ) : (
+              <div>{messagesEnCours.map((msg) => renderMessageCard(msg))}</div>
+            )}
           </div>
-        )}
-      </div>
+
+          <h2 style={{ fontSize: 18, fontWeight: '700', color: '#000', margin: '0 0 12px' }}>
+            Demandes résolues ({messagesResolues.length})
+          </h2>
+          <div style={{ backgroundColor: '#FFF', borderRadius: 16, border: '1px solid #EEE', overflow: 'hidden' }}>
+            {messagesResolues.length === 0 ? (
+              <p style={{ padding: 32, color: '#666' }}>Aucune demande résolue.</p>
+            ) : (
+              <div>{messagesResolues.map((msg) => renderMessageCard(msg))}</div>
+            )}
+          </div>
+        </>
+      ) : (
+        <div style={{ backgroundColor: '#FFF', borderRadius: 16, border: '1px solid #EEE', overflow: 'hidden' }}>
+          <div>{messages.map((msg) => renderMessageCard(msg))}</div>
+        </div>
+      )}
     </div>
   );
 }

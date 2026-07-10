@@ -28,6 +28,7 @@ type Historique = {
   description: string;
   compte_rendu: string;
   pieces_changees: string | null;
+  source?: 'interne' | 'demande_residence' | null;
 };
 
 type Machine = {
@@ -55,6 +56,7 @@ export default function CrmLaverieDetail() {
   const [historiqueForm, setHistoriqueForm] = useState({ motif: '', description: '', compte_rendu: '', pieces_changees: '' });
   const [savingHistorique, setSavingHistorique] = useState(false);
   const [historiqueError, setHistoriqueError] = useState<string | null>(null);
+  const [historiqueFilter, setHistoriqueFilter] = useState<'toutes' | 'interne' | 'demande_residence'>('toutes');
   const [machines, setMachines] = useState<Machine[]>([]);
   const [machinesLoading, setMachinesLoading] = useState(false);
   const [machinesError, setMachinesError] = useState<string | null>(null);
@@ -268,7 +270,7 @@ export default function CrmLaverieDetail() {
         supabase.from('laveries').select('*').eq('id', targetId).single(),
         supabase
           .from('historique')
-          .select('id, technicien_id, technicien_nom, date_intervention, motif, description, compte_rendu, pieces_changees')
+          .select('id, technicien_id, technicien_nom, date_intervention, motif, description, compte_rendu, pieces_changees, source')
           .eq('laverie_id', targetId)
           .order('date_intervention', { ascending: false }),
       ]);
@@ -394,6 +396,10 @@ export default function CrmLaverieDetail() {
     setSavingNotes(false);
   };
 
+  const filteredHistorique = historique.filter(
+    (item) => historiqueFilter === 'toutes' || (item.source ?? 'interne') === historiqueFilter
+  );
+
   if (loading) return <p style={{ color: '#666' }}>Chargement...</p>;
   if (!laverie) {
     return (
@@ -484,14 +490,45 @@ export default function CrmLaverieDetail() {
       <div className={styles.grid}>
         <div className={styles.card}>
           <h2 className={styles.cardTitle}>Historique des interventions</h2>
+          <div style={{ display: 'flex', gap: 8, marginBottom: 14, flexWrap: 'wrap' }}>
+            {([
+              ['toutes', 'Toutes'],
+              ['interne', 'Interventions internes'],
+              ['demande_residence', 'Demandes de résidence'],
+            ] as const).map(([value, label]) => (
+              <button
+                key={value}
+                type="button"
+                onClick={() => setHistoriqueFilter(value)}
+                style={{
+                  padding: '6px 12px',
+                  borderRadius: 999,
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  border: historiqueFilter === value ? '2px solid #1C69D3' : '1px solid #E5E7EB',
+                  backgroundColor: historiqueFilter === value ? '#E8F1FC' : '#FFF',
+                  color: '#111',
+                }}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
           {historique.length === 0 ? (
             <p className={styles.emptyText}>Aucune intervention cloturee.</p>
+          ) : filteredHistorique.length === 0 ? (
+            <p className={styles.emptyText}>Aucune intervention pour ce filtre.</p>
           ) : (
             <div className={styles.historiqueList}>
               {historiqueError && <p className={styles.notice}>{historiqueError}</p>}
-              {historique.map((item) =>
+              {filteredHistorique.map((item) =>
                 editingHistoriqueId === item.id ? (
-                  <div key={item.id} className={styles.historiqueItem}>
+                  <div
+                    key={item.id}
+                    className={styles.historiqueItem}
+                    style={item.source === 'demande_residence' ? { border: '2px solid #F59E0B' } : undefined}
+                  >
                     <p className={styles.historiqueMeta} style={{ marginBottom: 8 }}>
                       {new Date(item.date_intervention).toLocaleDateString('fr-FR')} - {item.technicien_nom}
                     </p>
@@ -535,9 +572,20 @@ export default function CrmLaverieDetail() {
                     </div>
                   </div>
                 ) : (
-                  <div key={item.id} className={styles.historiqueItem}>
+                  <div
+                    key={item.id}
+                    className={styles.historiqueItem}
+                    style={item.source === 'demande_residence' ? { border: '2px solid #F59E0B' } : undefined}
+                  >
                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
-                      <p className={styles.historiqueMotif}>{item.motif}</p>
+                      <p className={styles.historiqueMotif}>
+                        {item.motif}
+                        {item.source === 'demande_residence' && (
+                          <span style={{ marginLeft: 8, fontSize: 11, fontWeight: 700, color: '#B45309', backgroundColor: '#FEF3C7', padding: '2px 8px', borderRadius: 999 }}>
+                            Demande résidence
+                          </span>
+                        )}
+                      </p>
                       <button
                         type="button"
                         className={styles.machineBtnService}
