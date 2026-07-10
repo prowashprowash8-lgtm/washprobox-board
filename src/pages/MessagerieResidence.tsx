@@ -708,7 +708,7 @@ export default function MessagerieResidence() {
             </p>
           </div>
         </div>
-      ) : isPatron ? (
+      ) : (
         <>
           <h2 style={{ fontSize: 18, fontWeight: '700', color: '#000', margin: '0 0 12px' }}>
             Demandes en cours ({messagesEnCours.length})
@@ -732,10 +732,6 @@ export default function MessagerieResidence() {
             )}
           </div>
         </>
-      ) : (
-        <div style={{ backgroundColor: '#FFF', borderRadius: 16, border: '1px solid #EEE', overflow: 'hidden' }}>
-          <div>{messages.map((msg) => renderMessageCard(msg))}</div>
-        </div>
       )}
     </div>
   );
