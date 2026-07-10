@@ -972,7 +972,7 @@ export default function EmplacementDetail() {
                 </div>
               </div>
               <div style={{ marginBottom: 16 }}>
-                <label style={{ display: 'block', marginBottom: 6, fontSize: 14, fontWeight: '500', color: '#374151' }}>ID ESP32</label>
+                <label style={{ display: 'block', marginBottom: 6, fontSize: 14, fontWeight: '500', color: '#374151' }}>Identifiant appareil</label>
                 <input
                   type="text"
                   value={formMachine.esp32_id}

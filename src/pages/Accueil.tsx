@@ -160,7 +160,7 @@ export default function Accueil() {
             <div style={{ padding: 10, backgroundColor: '#E8F5FF', borderRadius: 12 }}>
               <Cpu size={24} color="#2196F3" />
             </div>
-            <span style={{ fontSize: 14, color: '#666', fontWeight: '500' }}>Appareils connectés (ESP32)</span>
+            <span style={{ fontSize: 14, color: '#666', fontWeight: '500' }}>Appareils connectés</span>
           </div>
           {loading ? (
             <p style={{ fontSize: 28, fontWeight: '700', color: '#000', margin: 0 }}>...</p>

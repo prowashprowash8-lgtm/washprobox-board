@@ -97,7 +97,7 @@ export default function CrmLaverieDetail() {
   const launchTestCycle = async (machine: Machine) => {
     const normalizedEsp32Id = (machine.esp32_id || '').trim().toUpperCase();
     if (!normalizedEsp32Id) {
-      setMachinesError('ID ESP32 manquant sur cette machine.');
+      setMachinesError('Identifiant appareil manquant sur cette machine.');
       return;
     }
     setBusyMachineId(machine.id);
@@ -144,8 +144,8 @@ export default function CrmLaverieDetail() {
         })
         .select('id')
         .single();
-      if (cmdErr) throw new Error(`Commande ESP32 : ${cmdErr.message}`);
-      if (!cmdData?.id) throw new Error('Commande ESP32 non créée.');
+      if (cmdErr) throw new Error(`Commande appareil : ${cmdErr.message}`);
+      if (!cmdData?.id) throw new Error('Commande appareil non créée.');
 
       await supabase.from('transactions').update({ machine_command_id: cmdData.id }).eq('id', txData.id);
       await supabase.from('machines').update({ statut: 'occupe', estimated_end_time: null }).eq('id', machine.id);

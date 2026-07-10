@@ -361,7 +361,7 @@ export default function MachineDetail() {
                 </div>
               </div>
               <div style={{ marginBottom: 16 }}>
-                <label style={{ display: 'block', marginBottom: 6, fontSize: 14, fontWeight: '500', color: '#374151' }}>ID ESP32</label>
+                <label style={{ display: 'block', marginBottom: 6, fontSize: 14, fontWeight: '500', color: '#374151' }}>Identifiant appareil</label>
                 <input
                   type="text"
                   value={formMachine.esp32_id}
@@ -518,14 +518,14 @@ export default function MachineDetail() {
               <div>
                 <p style={{ margin: '0 0 6px', fontSize: 15, fontWeight: 700, color: '#1E3A8A' }}>Cycle de test</p>
                 <p style={{ margin: 0, fontSize: 13, color: '#1D4ED8', maxWidth: 520 }}>
-                  Envoie une commande START a l&apos;ESP32 sans comptabiliser un vrai paiement client.
+                  Envoie une commande START a l'appareil sans comptabiliser un vrai paiement client.
                 </p>
               </div>
               <button
                 onClick={async () => {
                   const normalizedEsp32Id = (machine?.esp32_id ?? '').trim().toUpperCase();
                   if (!normalizedEsp32Id) {
-                    setSendError('ID ESP32 manquant sur cette machine.');
+                    setSendError('Identifiant appareil manquant sur cette machine.');
                     return;
                   }
                   setSendError(null);
@@ -589,10 +589,10 @@ export default function MachineDetail() {
                       .select('id')
                       .single();
                     if (cmdErr) {
-                      throw new Error(`Commande ESP32 : ${cmdErr.message}`);
+                      throw new Error(`Commande appareil : ${cmdErr.message}`);
                     }
                     if (!cmdData?.id) {
-                      throw new Error('Commande ESP32 non créée.');
+                      throw new Error('Commande appareil non créée.');
                     }
 
                     const { error: txLinkErr } = await supabase
