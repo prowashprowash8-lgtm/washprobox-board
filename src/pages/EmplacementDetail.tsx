@@ -78,7 +78,7 @@ export default function EmplacementDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { isResidence, canAccessEmplacement } = useBoardAccess();
-  const [emplacement, setEmplacement] = useState<{ id: string; name: string; address?: string } | null>(null);
+  const [emplacement, setEmplacement] = useState<{ id: string; name: string; address?: string; redevance_pourcentage?: number | null } | null>(null);
   const [machines, setMachines] = useState<Machine[]>([]);
   const [revenusByMachine, setRevenusByMachine] = useState<Record<string, number>>({});
   const [periode, setPeriode] = useState<Periode>('mois');
@@ -100,7 +100,7 @@ export default function EmplacementDetail() {
     actif: true,
     machine_kind: 'lavage' as MachineKind,
   });
-  const [formLaverie, setFormLaverie] = useState({ name: '', address: '', latitude: null as number | null, longitude: null as number | null });
+  const [formLaverie, setFormLaverie] = useState({ name: '', address: '', latitude: null as number | null, longitude: null as number | null, redevancePourcentage: '' });
   const [addressSuggestions, setAddressSuggestions] = useState<AddressSuggestion[]>([]);
   const [addressLoading, setAddressLoading] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -139,7 +139,7 @@ export default function EmplacementDetail() {
     setCrmLaverieIdForLink(null);
     try {
       const [empRes, machRes] = await Promise.all([
-        supabase.from('emplacements').select('id, name, address').eq('id', id).single(),
+        supabase.from('emplacements').select('id, name, address, redevance_pourcentage').eq('id', id).single(),
         supabase.from('machines').select('id, nom, esp32_id, numero_serie, marque, modele, prix_centimes, actif, hors_service, machine_kind, type').eq('emplacement_id', id),
       ]);
       if (empRes.error) throw new Error(empRes.error.message);
@@ -374,7 +374,13 @@ export default function EmplacementDetail() {
 
   useEffect(() => {
     if (emplacement) {
-      setFormLaverie({ name: emplacement.name, address: emplacement.address ?? '', latitude: null, longitude: null });
+      setFormLaverie({
+        name: emplacement.name,
+        address: emplacement.address ?? '',
+        latitude: null,
+        longitude: null,
+        redevancePourcentage: emplacement.redevance_pourcentage != null ? String(emplacement.redevance_pourcentage) : '',
+      });
     }
   }, [emplacement]);
 
@@ -503,9 +509,14 @@ export default function EmplacementDetail() {
         }
       }
 
+      const redevance = formLaverie.redevancePourcentage.trim()
+        ? Number(formLaverie.redevancePourcentage.trim().replace(',', '.'))
+        : null;
+
       const payload: Record<string, unknown> = {
         name: formLaverie.name.trim(),
         address: formLaverie.address.trim() || null,
+        redevance_pourcentage: Number.isFinite(redevance) ? redevance : null,
       };
       if (latitude != null && longitude != null) {
         payload.latitude = latitude;
@@ -1148,6 +1159,24 @@ export default function EmplacementDetail() {
                 {geocodeNotice && (
                   <p style={{ margin: '8px 0 0', fontSize: 12, color: '#1F2937' }}>{geocodeNotice}</p>
                 )}
+              </div>
+              <div style={{ marginBottom: 24 }}>
+                <label style={{ display: 'block', marginBottom: 6, fontSize: 14, fontWeight: '500', color: '#374151' }}>
+                  Pourcentage de redevance à reverser à la résidence (%)
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  step={0.01}
+                  value={formLaverie.redevancePourcentage}
+                  onChange={(e) => setFormLaverie((p) => ({ ...p, redevancePourcentage: e.target.value }))}
+                  placeholder="Ex: 30"
+                  style={{ width: '100%', padding: 12, border: '1px solid #E5E7EB', borderRadius: 10, fontSize: 15, boxSizing: 'border-box' }}
+                />
+                <p style={{ margin: '6px 0 0', fontSize: 12, color: '#888' }}>
+                  Calculé sur le chiffre d'affaires hors taxes.
+                </p>
               </div>
               <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
                 <button type="button" onClick={() => { setShowParams(false); setDeleteError(null); }} style={{ padding: '12px 20px', backgroundColor: '#F5F5F5', color: '#444', border: 'none', borderRadius: 10, fontWeight: '600', cursor: 'pointer' }}>

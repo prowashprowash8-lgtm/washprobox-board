@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { Routes, Route, NavLink, Navigate, useLocation, useNavigate } from 'react-router-dom';
-import { LayoutDashboard, Receipt, MapPin, Tablet, Users, Megaphone, Target, LogOut, RotateCcw, Menu, X, MessageSquare } from 'lucide-react';
+import { LayoutDashboard, Receipt, MapPin, Tablet, Users, Megaphone, Target, LogOut, RotateCcw, Menu, X, MessageSquare, Percent } from 'lucide-react';
 import Accueil from './pages/Accueil';
 import Appareils from './pages/Appareils';
 import Emplacements from './pages/Emplacements';
@@ -14,6 +14,7 @@ import Utilisateurs from './pages/Utilisateurs';
 import ProfileDetail from './pages/ProfileDetail';
 import Login from './pages/Login';
 import MessagerieResidence from './pages/MessagerieResidence';
+import Redevances from './pages/Redevances';
 import CrmAccueil from './pages/crm/CrmAccueil';
 import CrmLaveries from './pages/crm/CrmLaveries';
 import CrmLaverieDetail from './pages/crm/CrmLaverieDetail';
@@ -200,7 +201,9 @@ function App() {
                     ? 'Remboursements'
                     : location.pathname.startsWith('/messagerie')
                       ? 'Messagerie'
-                      : 'Board';
+                      : location.pathname.startsWith('/redevances')
+                        ? 'Redevances'
+                        : 'Board';
 
   return (
     <div className={layoutStyles.appRoot}>
@@ -214,6 +217,7 @@ function App() {
           <MenuLink icon={<LayoutDashboard size={20}/>} label="Accueil" to={isCrmOnly ? '/crm/accueil' : '/'} />
           {canUseBoard && <MenuLink icon={<MapPin size={20}/>} label="Emplacements" to="/emplacements" />}
           {canUseBoard && isResidence && <MenuLink icon={<MessageSquare size={20}/>} label="Messagerie" to="/messagerie" />}
+          {canUseBoard && isResidence && <MenuLink icon={<Percent size={20}/>} label="Redevances" to="/redevances" />}
           {canUseBoard && isPatron && (
             <>
               <MenuLink icon={<Receipt size={20}/>} label="Transactions" to="/transactions" />
@@ -298,6 +302,7 @@ function App() {
               <Route path="/emplacements" element={<Emplacements />} />
               <Route path="/emplacements/:id" element={<EmplacementDetail />} />
               {(isResidence || isPatron) && <Route path="/messagerie" element={<MessagerieResidence />} />}
+              {isResidence && <Route path="/redevances" element={<Redevances />} />}
               {isPatron ? (
                 <>
                   <Route path="/appareils" element={<Appareils />} />
@@ -358,6 +363,7 @@ function App() {
             <MenuLink icon={<LayoutDashboard size={20}/>} label="Accueil" to={isCrmOnly ? '/crm/accueil' : '/'} />
             {canUseBoard && <MenuLink icon={<MapPin size={20}/>} label="Emplacements" to="/emplacements" />}
             {canUseBoard && isResidence && <MenuLink icon={<MessageSquare size={20}/>} label="Messagerie" to="/messagerie" />}
+          {canUseBoard && isResidence && <MenuLink icon={<Percent size={20}/>} label="Redevances" to="/redevances" />}
             {canUseBoard && isPatron && (
               <>
                 <MenuLink icon={<Receipt size={20}/>} label="Transactions" to="/transactions" />

@@ -29,7 +29,7 @@ export default function Emplacements() {
   const [showAdd, setShowAdd] = useState(false);
   const [saving, setSaving] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
-  const [form, setForm] = useState({ name: '', address: '', latitude: null as number | null, longitude: null as number | null });
+  const [form, setForm] = useState({ name: '', address: '', latitude: null as number | null, longitude: null as number | null, redevancePourcentage: '' });
   const [addressSuggestions, setAddressSuggestions] = useState<AddressSuggestion[]>([]);
   const [addressLoading, setAddressLoading] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
@@ -211,9 +211,12 @@ export default function Emplacements() {
         }
       }
 
+      const redevance = form.redevancePourcentage.trim() ? Number(form.redevancePourcentage.trim().replace(',', '.')) : null;
+
       const payload: Record<string, unknown> = {
         name: form.name.trim(),
         address: form.address.trim() || null,
+        redevance_pourcentage: Number.isFinite(redevance) ? redevance : null,
       };
       if (latitude != null && longitude != null) {
         payload.latitude = latitude;
@@ -228,14 +231,14 @@ export default function Emplacements() {
       if (insertErr && (insertErr.message.includes('latitude') || insertErr.message.includes('longitude'))) {
         ({ data, error: insertErr } = await supabase
           .from('emplacements')
-          .insert({ name: form.name.trim(), address: form.address.trim() || null })
+          .insert({ name: form.name.trim(), address: form.address.trim() || null, redevance_pourcentage: Number.isFinite(redevance) ? redevance : null })
           .select('id')
           .single());
       }
       if (insertErr) throw insertErr;
 
       setShowAdd(false);
-      setForm({ name: '', address: '', latitude: null, longitude: null });
+      setForm({ name: '', address: '', latitude: null, longitude: null, redevancePourcentage: '' });
       setAddressSuggestions([]);
       setShowSuggestions(false);
       setGeocodeNotice(null);
@@ -264,7 +267,7 @@ export default function Emplacements() {
         <h1 style={{ fontSize: 28, fontWeight: '700', color: '#000', margin: 0 }}>Emplacements</h1>
         {!isResidence && (
           <button
-            onClick={() => { setAddError(null); setGeocodeNotice(null); setForm({ name: '', address: '', latitude: null, longitude: null }); setAddressSuggestions([]); setShowAdd(true); }}
+            onClick={() => { setAddError(null); setGeocodeNotice(null); setForm({ name: '', address: '', latitude: null, longitude: null, redevancePourcentage: '' }); setAddressSuggestions([]); setShowAdd(true); }}
             style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '12px 20px', backgroundColor: '#1C69D3', color: '#FFF', border: 'none', borderRadius: 10, fontWeight: '600', cursor: 'pointer', fontSize: 15 }}
           >
             <Plus size={20} /> Créer une laverie
@@ -350,6 +353,24 @@ export default function Emplacements() {
                 {geocodeNotice && (
                   <p style={{ margin: '8px 0 0', fontSize: 12, color: '#1F2937' }}>{geocodeNotice}</p>
                 )}
+              </div>
+              <div style={{ marginBottom: 24 }}>
+                <label style={{ display: 'block', marginBottom: 6, fontSize: 14, fontWeight: '500', color: '#374151' }}>
+                  Pourcentage de redevance à reverser à la résidence (%)
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  step={0.01}
+                  value={form.redevancePourcentage}
+                  onChange={(e) => setForm((p) => ({ ...p, redevancePourcentage: e.target.value }))}
+                  placeholder="Ex: 30"
+                  style={{ width: '100%', padding: 12, border: '1px solid #E5E7EB', borderRadius: 10, fontSize: 15, boxSizing: 'border-box' }}
+                />
+                <p style={{ margin: '6px 0 0', fontSize: 12, color: '#888' }}>
+                  Calculé sur le chiffre d'affaires hors taxes. Laisser vide si non applicable — modifiable plus tard.
+                </p>
               </div>
               <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end' }}>
                 <button type="button" onClick={() => setShowAdd(false)} style={{ padding: '12px 20px', backgroundColor: '#F5F5F5', color: '#444', border: 'none', borderRadius: 10, fontWeight: '600', cursor: 'pointer' }}>
